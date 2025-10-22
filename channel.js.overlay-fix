@@ -1,0 +1,31 @@
+                // Video branch with overlay support using compositor
+                gstCmd.push(
+                    "demux.", "!", "queue", "!", "decodebin", "!",
+                    "videoconvert", "!", "videoscale", "!",
+                    "video/x-raw,width=" + this.config.width + ",height=" + this.config.height
+                );
+                
+                // If overlay configured, use compositor
+                if (this.config.overlayUrl) {
+                    gstCmd.push(
+                        "!", "compositor", "name=comp",
+                        "sink_0::alpha=1", "sink_1::alpha=1", "!",
+                        "queue"
+                    );
+                    
+                    // Overlay image branch
+                    gstCmd.push(
+                        "souphttpsrc", "location=" + this.config.overlayUrl, "!",
+                        "decodebin", "!", "videoconvert", "!", "videoscale", "!",
+                        "video/x-raw,width=" + this.config.width + ",height=" + this.config.height, "!",
+                        "comp."
+                    );
+                } else {
+                    gstCmd.push("!", "queue");
+                }
+                
+                // Continue video encoding
+                gstCmd.push(
+                    "!", "x264enc", "bitrate=" + this.config.bitrate, "tune=zerolatency", "speed-preset=veryfast", "!",
+                    "h264parse", "!", "queue", "!", "tee", "name=vtee"
+                );

@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5-Channel Stream Manager</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #0a0a0a; color: #fff; padding: 15px; font-size: 13px; }
+        .container { max-width: 2400px; margin: 0 auto; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 10px; }
+        h1 { font-size: 20px; color: #00ff88; }
+        .logout-btn { background: #dc2626; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; border: none; color: white; }
+        .logout-btn:hover { background: #b91c1c; }
+        
+        .channels-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(550px, 1fr)); gap: 15px; }
+        
+        .channel-card { background: #1a1a1a; border: 2px solid #333; border-radius: 8px; padding: 12px; transition: border-color 0.3s; }
+        .channel-card.live { border-color: #16a34a; box-shadow: 0 0 20px rgba(22, 163, 74, 0.3); }
+        
+        .channel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .channel-title { font-size: 16px; font-weight: 600; }
+        .channel-status { display: flex; gap: 8px; align-items: center; font-size: 11px; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 10px; }
+        .status-badge.live { background: #16a34a; color: white; animation: pulse 2s infinite; }
+        .status-badge.offline { background: #444; color: #999; }
+        
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        
+        .input-info { margin-bottom: 10px; padding: 8px; background: #252525; border-radius: 6px; font-size: 10px; line-height: 1.5; }
+        .input-info strong { color: #00ff88; }
+        
+        .tabs { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 2px solid #333; }
+        .tab { padding: 8px 16px; background: transparent; border: none; color: #999; cursor: pointer; font-size: 12px; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+        .tab:hover { color: #fff; background: #252525; }
+        .tab.active { color: #00ff88; border-bottom-color: #00ff88; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .player-container { position: relative; margin-bottom: 10px; background: #000; border-radius: 6px; overflow: hidden; aspect-ratio: 16/9; }
+        .player-iframe { width: 100%; height: 100%; border: none; display: block; }
+        
+        .player-label { position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.8); padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: 600; z-index: 10; }
+        .player-label.preview { color: #60a5fa; }
+        .player-label.program { color: #00ff88; }
+        
+        .live-overlay { position: absolute; top: 10px; right: 10px; background: rgba(22, 163, 74, 0.95); padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 8px; z-index: 10; pointer-events: none; }
+        .live-overlay .live-dot { width: 12px; height: 12px; background: white; border-radius: 50%; animation: blink 1s infinite; }
+        @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+        
+        .section { margin-top: 10px; padding: 10px; background: #252525; border-radius: 6px; }
+        .section h3 { font-size: 12px; margin-bottom: 8px; color: #00ff88; }
+        .section.disabled { opacity: 0.5; pointer-events: none; }
+        
+        .channel-control { margin-bottom: 10px; }
+        .channel-control button { width: 100%; padding: 10px; font-size: 13px; font-weight: 600; }
+        
+        .overlay-section { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+        .overlay-section input { flex: 1; background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; }
+        .overlay-section button { padding: 6px 12px; font-size: 11px; }
+        .overlay-current { color: #00ff88; font-size: 10px; margin-top: 4px; }
+        
+        .destination { background: #1a1a1a; padding: 8px; border-radius: 4px; margin-bottom: 6px; font-size: 11px; }
+        .dest-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .dest-info { flex: 1; min-width: 0; }
+        .dest-name { font-weight: 600; margin-bottom: 2px; }
+        .dest-name.streaming { color: #00ff88; }
+        .dest-url { color: #666; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dest-protocol { display: inline-block; background: #444; padding: 2px 6px; border-radius: 3px; font-size: 9px; margin-left: 6px; }
+        .dest-actions { display: flex; gap: 4px; }
+        .dest-actions button { padding: 4px 8px; font-size: 10px; }
+        
+        .add-form { margin-top: 8px; }
+        .add-form input { background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 6px 8px; border-radius: 4px; width: 100%; margin-bottom: 6px; font-size: 11px; }
+        
+        button { background: #2563eb; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500; transition: all 0.2s; }
+        button:hover:not(:disabled) { background: #1d4ed8; }
+        button:disabled { background: #444; opacity: 0.5; cursor: not-allowed; }
+        button.danger { background: #dc2626; }
+        button.danger:hover { background: #b91c1c; }
+        button.success { background: #16a34a; }
+        button.success:hover { background: #15803d; }
+        button.warning { background: #d97706; }
+        button.warning:hover { background: #b45309; }
+        
+        .toast { position: fixed; top: 20px; right: 20px; background: #1a1a1a; border: 1px solid #00ff88; padding: 12px 18px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,255,136,0.3); z-index: 1000; animation: slideIn 0.3s; font-size: 12px; }
+        @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        @media (max-width: 1600px) {
+            .channels-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 5-Channel Stream Manager</h1>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <div class="channels-grid">
+            <!-- Channel 1 -->
+            <div class="channel-card" id="card1">
+                <div class="channel-header">
+                    <div class="channel-title">Channel 1</div>
+                    <div class="channel-status">
+                        <span class="status-badge offline" id="badge1">OFFLINE</span>
+                    </div>
+                </div>
+                <div class="input-info">
+                    <strong>SRT:</strong> srt://134.199.150.238:8890 | <strong>ID:</strong> publish:channel1 | <strong>RTMP:</strong> rtmp://134.199.150.238:1935/channel1/stream
+                </div>
+                
+                <div class="channel-control">
+                    <button id="channelBtn1" class="success" onclick="toggleChannel(1)">▶️ Start Channel</button>
+                </div>
+                
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab(1, 'preview')">Preview</button>
+                    <button class="tab" onclick="switchTab(1, 'program')">Program</button>
+                    <button class="tab" onclick="switchTab(1, 'settings')">Settings</button>
+                </div>
+                
+                <div class="tab-content active" id="tab1-preview">
+                    <div class="player-container">
+                        <div class="player-label preview">PREVIEW - Raw Source</div>
+                        <iframe class="player-iframe" src="/player.html?channel=1" allow="autoplay"></iframe>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="tab1-program">
+                    <div class="player-container">
+                        <div class="player-label program">PROGRAM - Processed Output</div>
+                        <iframe class="player-iframe" src="/player.html?channel=program1" allow="autoplay"></iframe>
+                        <div class="live-overlay" id="liveOverlay1" style="display: none;">
+                            <div class="live-dot"></div>
+                            <span>LIVE</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="tab1-settings">
+                    <div class="section">
+                        <h3>🎨 Overlay</h3>
+                        <div class="overlay-section">
+                            <input type="text" id="overlayUrl1" placeholder="Overlay image URL (PNG with transparency)" />
+                            <button onclick="setOverlay(1)">Set</button>
+                        </div>
+                        <div class="overlay-current" id="overlayCurrent1"></div>
+                    </div>
+                    
+                    <div class="section" id="destSection1">
+                        <h3>📤 Destinations</h3>
+                        <div id="destinations1"></div>
+                        <div class="add-form">
+                            <input type="text" id="destName1" placeholder="Name (e.g., YouTube)" />
+                            <input type="text" id="destUrl1" placeholder="srt:// or rtmp://" />
+                            <button onclick="addDestination(1)" style="width: 100%;">+ Add Destination</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Repeat for channels 2-5 -->
+            <!-- Channel 2 -->
+            <div class="channel-card" id="card2">
+                <div class="channel-header">
+                    <div class="channel-title">Channel 2</div>
+                    <div class="channel-status">
+                        <span class="status-badge offline" id="badge2">OFFLINE</span>
+                    </div>
+                </div>
+                <div class="input-info">
+                    <strong>SRT:</strong> srt://134.199.150.238:8891 | <strong>ID:</strong> publish:channel2 | <strong>RTMP:</strong> rtmp://134.199.150.238:1935/channel2/stream
+                </div>
+                
+                <div class="channel-control">
+                    <button id="channelBtn2" class="success" onclick="toggleChannel(2)">▶️ Start Channel</button>
+                </div>
+                
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab(2, 'preview')">Preview</button>
+                    <button class="tab" onclick="switchTab(2, 'program')">Program</button>
+                    <button class="tab" onclick="switchTab(2, 'settings')">Settings</button>
+                </div>
+                
+                <div class="tab-content active" id="tab2-preview">
+                    <div class="player-container">
+                        <div class="player-label preview">PREVIEW - Raw Source</div>
+                        <iframe class="player-iframe" src="/player.html?channel=2" allow="autoplay"></iframe>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="tab2-program">
+                    <div class="player-container">
+                        <div class="player-label program">PROGRAM - Processed Output</div>
+                        <iframe class="player-iframe" src="/player.html?channel=program2" allow="autoplay"></iframe>
+                        <div class="live-overlay" id="liveOverlay2" style="display: none;">
+                            <div class="live-dot"></div>
+                            <span>LIVE</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="tab2-settings">
+                    <div class="section">
+                        <h3>🎨 Overlay</h3>
+                        <div class="overlay-section">
+                            <input type="text" id="overlayUrl2" placeholder="Overlay image URL (PNG with transparency)" />
+                            <button onclick="setOverlay(2)">Set</button>
+                        </div>
+                        <div class="overlay-current" id="overlayCurrent2"></div>
+                    </div>
+                    
+                    <div class="section" id="destSection2">
+                        <h3>📤 Destinations</h3>
+                        <div id="destinations2"></div>
+                        <div class="add-form">
+                            <input type="text" id="destName2" placeholder="Name (e.g., YouTube)" />
+                            <input type="text" id="destUrl2" placeholder="srt:// or rtmp://" />
+                            <button onclick="addDestination(2)" style="width: 100%;">+ Add Destination</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Channel 3 -->
+            <div class="channel-card" id="card3">
+                <div class="channel-header">
+                    <div class="channel-title">Channel 3</div>
+                    <div class="channel-status">
+                        <span class="status-badge offline" id="badge3">OFFLINE</span>
+                    </div>
+                </div>
+                <div class="input-info">
+                    <strong>SRT:</strong> srt://134.199.150.238:8892 | <strong>ID:</strong> publish:channel3 | <strong>RTMP:</strong> rtmp://134.199.150.238:1935/channel3/stream
+                </div>
+                
+                <div class="channel-control">
+                    <button id="channelBtn3" class="success" onclick="toggleChannel(3)">▶️ Start Channel</button>
+                </div>
+                
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab(3, 'preview')">Preview</button>
+                    <button class="tab" onclick="switchTab(3, 'program')">Program</button>
+                    <button class="tab" onclick="switchTab(3, 'settings')">Settings</button>
+                </div>
+                
+                <div class="tab-content active" id="tab3-preview">
+                    <div class="player-container">
+                        <div class="player-label preview">PREVIEW - Raw Source</div>
+                        <iframe class="player-iframe" src="/player.html?channel=3" allow="autoplay"></iframe>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="tab3-program">
+                    <div class="player-container">
+                        <div class="player-label program">PROGRAM - Processed Output</div>
+                        <iframe class="player-iframe" src="/player.html?channel=program3" allow="autoplay"></iframe>
+                        <div class="live-overlay" id="liveOverlay3" style="display: none;">
+                            <div class="live-dot"></div>
+                            <span>LIVE</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="tab3-settings">
+                    <div class="section">
+                        <h3>🎨 Overlay</h3>
+                        <div class="overlay-section">
+                            <input type="text" id="overlayUrl3" placeholder="Overlay image URL (PNG with transparency)" />
+                            <button onclick="setOverlay(3)">Set</button>
+                        </div>
+                        <div class="overlay-current" id="overlayCurrent3"></div>
+                    </div>
+                    
+                    <div class="section" id="destSection3">
+                        <h3>📤 Destinations</h3>
+                        <div id="destinations3"></div>
+                        <div class="add-form">
+                            <input type="text" id="destName3" placeholder="Name (e.g., YouTube)" />
+                            <input type="text" id="destUrl3" placeholder="srt:// or rtmp://" />
+                            <button onclick="addDestination(3)" style="width: 100%;">+ Add Destination</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Channel 4 -->
+            <div class="channel-card" id="card4">
+                <div class="channel-header">
+                    <div class="channel-title">Channel 4</div>
+                    <div class="channel-status">
+                        <span class="status-badge offline" id="badge4">OFFLINE</span>
+                    </div>
+                </div>
+                <div class="input-info">
+                    <strong>SRT:</strong> srt://134.199.150.238:8893 | <strong>ID:</strong> publish:channel4 | <strong>RTMP:</strong> rtmp://134.199.150.238:1935/channel4/stream
+                </div>
+                
+                <div class="channel-control">
+                    <button id="channelBtn4" class="success" onclick="toggleChannel(4)">▶️ Start Channel</button>
+                </div>
+                
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab(4, 'preview')">Preview</button>
+                    <button class="tab" onclick="switchTab(4, 'program')">Program</button>
+                    <button class="tab" onclick="switchTab(4, 'settings')">Settings</button>
+                </div>
+                
+                <div class="tab-content active" id="tab4-preview">
+                    <div class="player-container">
+                        <div class="player-label preview">PREVIEW - Raw Source</div>
+                        <iframe class="player-iframe" src="/player.html?channel=4" allow="autoplay"></iframe>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="tab4-program">
+                    <div class="player-container">
+                        <div class="player-label program">PROGRAM - Processed Output</div>
+                        <iframe class="player-iframe" src="/player.html?channel=program4" allow="autoplay"></iframe>
+                        <div class="live-overlay" id="liveOverlay4" style="display: none;">
+                            <div class="live-dot"></div>
+                            <span>LIVE</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="tab4-settings">
+                    <div class="section">
+                        <h3>🎨 Overlay</h3>
+                        <div class="overlay-section">
+                            <input type="text" id="overlayUrl4" placeholder="Overlay image URL (PNG with transparency)" />
+                            <button onclick="setOverlay(4)">Set</button>
+                        </div>
+                        <div class="overlay-current" id="overlayCurrent4"></div>
+                    </div>
+                    
+                    <div class="section" id="destSection4">
+                        <h3>📤 Destinations</h3>
+                        <div id="destinations4"></div>
+                        <div class="add-form">
+                            <input type="text" id="destName4" placeholder="Name (e.g., YouTube)" />
+                            <input type="text" id="destUrl4" placeholder="srt:// or rtmp://" />
+                            <button onclick="addDestination(4)" style="width: 100%;">+ Add Destination</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Channel 5 -->
+            <div class="channel-card" id="card5">
+                <div class="channel-header">
+                    <div class="channel-title">Channel 5</div>
+                    <div class="channel-status">
+                        <span class="status-badge offline" id="badge5">OFFLINE</span>
+                    </div>
+                </div>
+                <div class="input-info">
+                    <strong>SRT:</strong> srt://134.199.150.238:8894 | <strong>ID:</strong> publish:channel5 | <strong>RTMP:</strong> rtmp://134.199.150.238:1935/channel5/stream
+                </div>
+                
+                <div class="channel-control">
+                    <button id="channelBtn5" class="success" onclick="toggleChannel(5)">▶️ Start Channel</button>
+                </div>
+                
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab(5, 'preview')">Preview</button>
+                    <button class="tab" onclick="switchTab(5, 'program')">Program</button>
+                    <button class="tab" onclick="switchTab(5, 'settings')">Settings</button>
+                </div>
+                
+                <div class="tab-content active" id="tab5-preview">
+                    <div class="player-container">
+                        <div class="player-label preview">PREVIEW - Raw Source</div>
+                        <iframe class="player-iframe" src="/player.html?channel=5" allow="autoplay"></iframe>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="tab5-program">
+                    <div class="player-container">
+                        <div class="player-label program">PROGRAM - Processed Output</div>
+                        <iframe class="player-iframe" src="/player.html?channel=program5" allow="autoplay"></iframe>
+                        <div class="live-overlay" id="liveOverlay5" style="display: none;">
+                            <div class="live-dot"></div>
+                            <span>LIVE</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="tab5-settings">
+                    <div class="section">
+                        <h3>🎨 Overlay</h3>
+                        <div class="overlay-section">
+                            <input type="text" id="overlayUrl5" placeholder="Overlay image URL (PNG with transparency)" />
+                            <button onclick="setOverlay(5)">Set</button>
+                        </div>
+                        <div class="overlay-current" id="overlayCurrent5"></div>
+                    </div>
+                    
+                    <div class="section" id="destSection5">
+                        <h3>📤 Destinations</h3>
+                        <div id="destinations5"></div>
+                        <div class="add-form">
+                            <input type="text" id="destName5" placeholder="Name (e.g., YouTube)" />
+                            <input type="text" id="destUrl5" placeholder="srt:// or rtmp://" />
+                            <button onclick="addDestination(5)" style="width: 100%;">+ Add Destination</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = window.location.origin + '/api';
+
+        function switchTab(channelNum, tabName) {
+            // Hide all tabs for this channel
+            ['preview', 'program', 'settings'].forEach(tab => {
+                const content = document.getElementById(`tab${channelNum}-${tab}`);
+                const button = document.querySelector(`#card${channelNum} .tabs .tab:nth-child(${tab === 'preview' ? 1 : tab === 'program' ? 2 : 3})`);
+                if (content) content.classList.remove('active');
+                if (button) button.classList.remove('active');
+            });
+            
+            // Show selected tab
+            const content = document.getElementById(`tab${channelNum}-${tabName}`);
+            const buttonIndex = tabName === 'preview' ? 1 : tabName === 'program' ? 2 : 3;
+            const button = document.querySelector(`#card${channelNum} .tabs .tab:nth-child(${buttonIndex})`);
+            if (content) content.classList.add('active');
+            if (button) button.classList.add('active');
+        }
+
+        async function checkAuth() {
+            try {
+                const res = await fetch(API + '/check-auth', { credentials: 'include' });
+                const data = await res.json();
+                if (!data.authenticated) window.location.href = '/';
+            } catch (e) {
+                window.location.href = '/';
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch(API + '/logout', { method: 'POST', credentials: 'include' });
+            } catch (e) {}
+            window.location.href = '/';
+        }
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch(API + '/status', { credentials: 'include' });
+                if (res.status === 401) { 
+                    window.location.href = '/'; 
+                    return; 
+                }
+                const data = await res.json();
+                updateChannels(data.channels);
+            } catch (err) {
+                console.error('Error fetching status:', err);
+            }
+        }
+
+        function updateChannels(channels) {
+            for (let i = 1; i <= 5; i++) {
+                const channel = channels['channel' + i];
+                const card = document.getElementById('card' + i);
+                const badge = document.getElementById('badge' + i);
+                const liveOverlay = document.getElementById('liveOverlay' + i);
+                const channelBtn = document.getElementById('channelBtn' + i);
+                const destSection = document.getElementById('destSection' + i);
+                const overlayInput = document.getElementById('overlayUrl' + i);
+                const overlayCurrent = document.getElementById('overlayCurrent' + i);
+                const destContainer = document.getElementById('destinations' + i);
+                
+                // Update LIVE status
+                const isLive = channel.isPreviewRunning;
+                if (isLive) {
+                    card.classList.add('live');
+                    badge.className = 'status-badge live';
+                    badge.textContent = 'LIVE';
+                    liveOverlay.style.display = 'flex';
+                    channelBtn.className = 'danger';
+                    channelBtn.textContent = '⏹️ Stop Channel';
+                    destSection.classList.remove('disabled');
+                } else {
+                    card.classList.remove('live');
+                    badge.className = 'status-badge offline';
+                    badge.textContent = 'OFFLINE';
+                    liveOverlay.style.display = 'none';
+                    channelBtn.className = 'success';
+                    channelBtn.textContent = '▶️ Start Channel';
+                    destSection.classList.add('disabled');
+                }
+                
+                // Update overlay display
+                if (channel.config && channel.config.overlayUrl) {
+                    overlayInput.value = channel.config.overlayUrl;
+                    overlayCurrent.textContent = '✅ ' + channel.config.overlayUrl;
+                } else {
+                    overlayCurrent.textContent = '';
+                }
+                
+                // Update destinations
+                if (channel.destinations && channel.destinations.length > 0) {
+                    destContainer.innerHTML = channel.destinations.map(d => `
+                        <div class="destination">
+                            <div class="dest-header">
+                                <div class="dest-info">
+                                    <div class="dest-name ${d.isStreaming ? 'streaming' : ''}">${d.isStreaming ? '🔴' : '⚪'} ${d.name}<span class="dest-protocol">${d.protocol.toUpperCase()}</span></div>
+                                    <div class="dest-url">${d.url}</div>
+                                </div>
+                                <div class="dest-actions">
+                                    <button class="${d.isStreaming ? 'danger' : 'success'}" onclick="toggleDestination(${i}, '${d.id}', ${d.isStreaming})">${d.isStreaming ? 'Stop' : 'Start'}</button>
+                                    <button class="danger" onclick="removeDestination(${i}, '${d.id}')">×</button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    destContainer.innerHTML = '<p style="color: #666; text-align: center; padding: 10px;">No destinations</p>';
+                }
+            }
+        }
+
+        async function toggleChannel(channelNum) {
+            const channel = await getChannelData(channelNum);
+            const action = channel.isPreviewRunning ? 'stop' : 'start';
+            
+            try {
+                const res = await fetch(API + '/channel/' + channelNum + '/preview/' + action, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(action === 'start' ? '✅ Channel started' : '⏹️ Channel stopped');
+                } else {
+                    showToast('❌ ' + (data.message || 'Error'));
+                }
+                fetchStatus();
+            } catch (err) {
+                showToast('❌ Error: ' + err.message);
+            }
+        }
+
+        async function setOverlay(channelNum) {
+            const url = document.getElementById('overlayUrl' + channelNum).value.trim();
+            try {
+                await fetch(API + '/channel/' + channelNum + '/overlay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ url: url || null })
+                });
+                showToast(url ? '✅ Overlay set - restarting channel' : '✅ Overlay removed');
+                fetchStatus();
+            } catch (err) {
+                showToast('❌ Error setting overlay');
+            }
+        }
+
+        async function addDestination(channelNum) {
+            const name = document.getElementById('destName' + channelNum).value.trim();
+            const url = document.getElementById('destUrl' + channelNum).value.trim();
+            
+            if (!url) return showToast('❌ URL required');
+            
+            try {
+                await fetch(API + '/channel/' + channelNum + '/destination', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ name: name || 'Destination', url })
+                });
+                showToast('✅ Destination added');
+                document.getElementById('destName' + channelNum).value = '';
+                document.getElementById('destUrl' + channelNum).value = '';
+                fetchStatus();
+            } catch (err) {
+                showToast('❌ Error adding destination');
+            }
+        }
+
+        async function toggleDestination(channelNum, destId, isStreaming) {
+            try {
+                await fetch(API + '/channel/' + channelNum + '/destination/' + destId + '/' + (isStreaming ? 'stop' : 'start'), {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                showToast(isStreaming ? '⏹️ Stopped' : '▶️ Started');
+                fetchStatus();
+            } catch (err) {
+                showToast('❌ Error toggling destination');
+            }
+        }
+
+        async function removeDestination(channelNum, destId) {
+            if (!confirm('Remove destination?')) return;
+            try {
+                await fetch(API + '/channel/' + channelNum + '/destination/' + destId, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                showToast('✅ Removed');
+                fetchStatus();
+            } catch (err) {
+                showToast('❌ Error removing destination');
+            }
+        }
+
+        async function getChannelData(channelNum) {
+            try {
+                const res = await fetch(API + '/status', { credentials: 'include' });
+                const data = await res.json();
+                return data.channels['channel' + channelNum];
+            } catch (err) {
+                return { isPreviewRunning: false };
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        checkAuth();
+        fetchStatus();
+        setInterval(fetchStatus, 3000);
+    </script>
+</body>
+</html>

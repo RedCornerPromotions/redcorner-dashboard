@@ -1,0 +1,265 @@
+const { spawn } = require('child_process');
+const { EventEmitter } = require('events');
+
+class Channel extends EventEmitter {
+    constructor(channelNumber, name) {
+        super();
+        this.channelNumber = channelNumber;
+        this.name = name;
+        this.config = {
+            srt: "srt://0.0.0.0:" + (8889 + channelNumber) + "?mode=listener",
+            rtmp: "rtmp://localhost:1935/channel" + channelNumber + "/stream",
+            rtsp: "rtsp://localhost:" + (8553 + channelNumber) + "/channel" + channelNumber,
+            width: 1920,
+            height: 1080,
+            bitrate: 6000,
+            destinations: [],
+            previewUrl: "rtmp://localhost:1935/preview/channel" + channelNumber,
+            programUrl: "rtmp://localhost:1935/program/channel" + channelNumber,
+            overlayUrl: null,
+        };
+        
+        this.activeInput = null;
+        this.isPreviewRunning = false;
+        this.previewProcess = null;
+        this.outputProcesses = new Map();
+        this.startTime = null;
+    }
+    
+    detectProtocol(url) {
+        if (url.startsWith('srt://')) return 'srt';
+        if (url.startsWith('rtmp://')) return 'rtmp';
+        if (url.startsWith('rtsp://')) return 'rtsp';
+        if (url.includes('whip') || url.includes('whep')) return 'whip';
+        return 'unknown';
+    }
+    
+    startPreview(inputUrl) {
+        if (this.isPreviewRunning) return { success: false, message: "Preview already running" };
+        
+        try {
+            this.activeInput = inputUrl;
+            const protocol = this.detectProtocol(inputUrl);
+            const gstCmd = [];
+            
+            if (protocol === 'rtsp') {
+                gstCmd.push("rtspsrc", "location=" + inputUrl, "latency=100", "protocols=tcp", "name=src");
+                
+                // Video branch
+                gstCmd.push("src.", "!", "queue", "!", "rtpjitterbuffer", "latency=100", "!", "decodebin", "!");
+                gstCmd.push("videoconvert", "!", "videoscale", "!");
+                gstCmd.push("video/x-raw,width=" + this.config.width + ",height=" + this.config.height);
+                
+                if (this.config.overlayUrl) {
+                    // Use compositor for overlay
+                    gstCmd.push("!", "compositor", "name=comp", "sink_0::zorder=0", "sink_1::zorder=1", "!");
+                    
+                    // Overlay image source (separate branch)
+                    gstCmd.push("souphttpsrc", "location=" + this.config.overlayUrl, "!", "decodebin", "!");
+                    gstCmd.push("imagefreeze", "!", "videoconvert", "!", "videoscale", "!");
+                    gstCmd.push("video/x-raw,width=" + this.config.width + ",height=" + this.config.height, "!", "comp.");
+                    
+                    gstCmd.push("queue");
+                } else {
+                    gstCmd.push("!", "queue");
+                }
+                
+                gstCmd.push("!", "x264enc", "bitrate=" + this.config.bitrate, "tune=zerolatency", "speed-preset=veryfast", "!");
+                gstCmd.push("h264parse", "!", "queue", "!", "tee", "name=vtee");
+                
+                // Audio branch
+                gstCmd.push("src.", "!", "queue", "!", "decodebin", "!", "audioconvert", "!", "audioresample", "!");
+                gstCmd.push("audio/x-raw,channels=2,rate=48000", "!", "queue", "!", "avenc_aac", "!");
+                gstCmd.push("aacparse", "!", "queue", "!", "tee", "name=atee");
+                
+                gstCmd.push("vtee.", "!", "queue", "!", "flvmux", "name=previewmux", "!", "queue", "!");
+                gstCmd.push("rtmpsink", "location=" + this.config.previewUrl);
+                gstCmd.push("atee.", "!", "queue", "!", "previewmux.");
+                
+                gstCmd.push("vtee.", "!", "queue", "!", "flvmux", "name=programmux", "!", "queue", "!");
+                gstCmd.push("rtmpsink", "location=" + this.config.programUrl);
+                gstCmd.push("atee.", "!", "queue", "!", "programmux.");
+                
+            } else {
+                return { success: false, message: "Only RTSP supported for now" };
+            }
+            
+            console.log("[" + this.name + "] Starting GStreamer channel");
+            console.log("[" + this.name + "] Input:", inputUrl);
+            console.log("[" + this.name + "] Preview:", this.config.previewUrl);
+            console.log("[" + this.name + "] Program:", this.config.programUrl);
+            if (this.config.overlayUrl) {
+                console.log("[" + this.name + "] Overlay:", this.config.overlayUrl);
+            }
+            console.log("[" + this.name + "] Pipeline:", gstCmd.join(" "));
+            
+            this.previewProcess = spawn("gst-launch-1.0", gstCmd);
+            
+            this.previewProcess.stderr.on("data", (d) => {
+                const msg = d.toString().trim();
+                if (msg.includes("ERROR")) {
+                    console.error("[" + this.name + "]", msg);
+                }
+            });
+            
+            this.previewProcess.on("close", (code) => {
+                console.log("[" + this.name + "] Channel stopped, exit:", code);
+                this.isPreviewRunning = false;
+                this.previewProcess = null;
+                this.activeInput = null;
+            });
+            
+            this.isPreviewRunning = true;
+            this.startTime = Date.now();
+            return { success: true, message: "Channel started" };
+            
+        } catch (err) {
+            console.error("[" + this.name + "] Error:", err);
+            return { success: false, message: err.message };
+        }
+    }
+    
+    stopPreview() {
+        if (!this.isPreviewRunning || !this.previewProcess) {
+            return { success: false, message: "Channel not running" };
+        }
+        this.stopAllDestinations();
+        this.previewProcess.kill("SIGINT");
+        this.isPreviewRunning = false;
+        this.previewProcess = null;
+        this.activeInput = null;
+        return { success: true, message: "Channel stopped" };
+    }
+    
+    startDestination(destId) {
+        const dest = this.config.destinations.find(d => d.id === destId);
+        if (!dest) return { success: false, message: "Destination not found" };
+        if (!this.isPreviewRunning) return { success: false, message: "Start channel first!" };
+        if (this.outputProcesses.has(destId)) return { success: false, message: "Already streaming" };
+        
+        try {
+            const destProtocol = this.detectProtocol(dest.url);
+            const gstCmd = ["rtmpsrc", "location=" + this.config.programUrl, "!", "queue", "!", "flvdemux", "name=demux"];
+            
+            if (destProtocol === 'srt') {
+                gstCmd.push("demux.", "!", "queue", "!", "h264parse", "!", "mpegtsmux", "name=mux", "!");
+                gstCmd.push("queue", "!", "srtsink", "uri=" + dest.url, "latency=125");
+                gstCmd.push("demux.", "!", "queue", "!", "aacparse", "!", "mux.");
+                
+            } else if (destProtocol === 'rtmp') {
+                gstCmd.push("demux.", "!", "queue", "!", "h264parse", "!", "flvmux", "name=mux", "streamable=true", "!");
+                gstCmd.push("queue", "!", "rtmpsink", "location=" + dest.url);
+                gstCmd.push("demux.", "!", "queue", "!", "aacparse", "!", "mux.");
+                
+            } else {
+                return { success: false, message: "Unsupported protocol: " + destProtocol };
+            }
+            
+            console.log("[" + this.name + "] Starting destination:", dest.name);
+            
+            const process = spawn("gst-launch-1.0", gstCmd);
+            
+            process.stderr.on("data", (d) => {
+                const msg = d.toString().trim();
+                if (msg.includes("ERROR")) {
+                    console.error("[" + this.name + " → " + dest.name + "]", msg);
+                }
+            });
+            
+            process.on("close", (code) => {
+                console.log("[" + this.name + " → " + dest.name + "] stopped:", code);
+                this.outputProcesses.delete(destId);
+                dest.isStreaming = false;
+            });
+            
+            this.outputProcesses.set(destId, process);
+            dest.isStreaming = true;
+            return { success: true, message: "Streaming to " + dest.name };
+            
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
+    }
+    
+    stopDestination(destId) {
+        const dest = this.config.destinations.find(d => d.id === destId);
+        if (!dest) return { success: false, message: "Destination not found" };
+        const process = this.outputProcesses.get(destId);
+        if (!process) return { success: false, message: "Not streaming" };
+        process.kill("SIGINT");
+        this.outputProcesses.delete(destId);
+        dest.isStreaming = false;
+        return { success: true, message: "Stopped" };
+    }
+    
+    stopAllDestinations() {
+        for (const [destId, process] of this.outputProcesses) {
+            process.kill("SIGINT");
+            const dest = this.config.destinations.find(d => d.id === destId);
+            if (dest) dest.isStreaming = false;
+        }
+        this.outputProcesses.clear();
+        return { success: true };
+    }
+    
+    toggleDestination(destId) {
+        const dest = this.config.destinations.find(d => d.id === destId);
+        if (!dest) return null;
+        if (dest.isStreaming) {
+            this.stopDestination(destId);
+        } else {
+            this.startDestination(destId);
+        }
+        return dest;
+    }
+    
+    setOverlay(url) {
+        const oldUrl = this.config.overlayUrl;
+        this.config.overlayUrl = url || null;
+        
+        if (this.isPreviewRunning && oldUrl !== url) {
+            const input = this.activeInput;
+            this.stopPreview();
+            setTimeout(() => {
+                this.startPreview(input);
+            }, 1000);
+            return { success: true, message: "Overlay updated - channel restarted" };
+        }
+        
+        return { success: true, message: url ? "Overlay set" : "Overlay removed" };
+    }
+    
+    getStatus() {
+        return {
+            name: this.name,
+            channelNumber: this.channelNumber,
+            isPreviewRunning: this.isPreviewRunning,
+            activeInput: this.activeInput,
+            config: this.config,
+            destinations: this.config.destinations,
+            uptime: this.startTime ? Math.floor((Date.now() - this.startTime) / 1000) : 0
+        };
+    }
+    
+    addDestination(url, name, protocol) {
+        const id = 'dest_' + Date.now();
+        const dest = {
+            id: id,
+            name: name || 'Destination ' + (this.config.destinations.length + 1),
+            url: url,
+            protocol: protocol || this.detectProtocol(url),
+            isStreaming: false
+        };
+        this.config.destinations.push(dest);
+        return dest;
+    }
+    
+    removeDestination(destId) {
+        if (this.outputProcesses.has(destId)) {
+            this.stopDestination(destId);
+        }
+        this.config.destinations = this.config.destinations.filter(d => d.id !== destId);
+    }
+}
+
+module.exports = Channel;

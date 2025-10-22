@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iframe Player Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+            background: #0a0a0a; 
+            color: #fff; 
+            padding: 20px; 
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; color: #00ff88; }
+        
+        .test-section { 
+            background: #1a1a1a; 
+            border: 2px solid #333; 
+            border-radius: 8px; 
+            padding: 20px; 
+            margin-bottom: 20px; 
+        }
+        
+        .test-section h2 { 
+            font-size: 18px; 
+            margin-bottom: 15px; 
+            color: #00ff88; 
+        }
+        
+        .player-container { 
+            background: #000; 
+            border-radius: 8px; 
+            overflow: hidden; 
+            aspect-ratio: 16/9; 
+            margin-bottom: 15px;
+        }
+        
+        .player-iframe { 
+            width: 100%; 
+            height: 100%; 
+            border: none; 
+            display: block; 
+        }
+        
+        .controls { 
+            display: flex; 
+            gap: 10px; 
+            margin-bottom: 15px; 
+        }
+        
+        .controls input { 
+            flex: 1; 
+            background: #252525; 
+            border: 1px solid #444; 
+            color: #fff; 
+            padding: 10px; 
+            border-radius: 6px; 
+            font-size: 14px; 
+        }
+        
+        .controls button { 
+            background: #2563eb; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 14px; 
+        }
+        
+        .controls button:hover { 
+            background: #1d4ed8; 
+        }
+        
+        .info { 
+            background: #252525; 
+            padding: 15px; 
+            border-radius: 6px; 
+            font-size: 13px; 
+            line-height: 1.8; 
+        }
+        
+        .info strong { 
+            color: #00ff88; 
+        }
+        
+        code { 
+            background: #1a1a1a; 
+            padding: 2px 6px; 
+            border-radius: 3px; 
+            font-family: monospace; 
+            color: #00ff88; 
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Iframe Player Test - FIXED</h1>
+        
+        <div class="test-section">
+            <h2>✅ Test 1: Working Player - Channel 1</h2>
+            <div class="player-container">
+                <iframe class="player-iframe" src="/player.html?channel=1" allow="autoplay"></iframe>
+            </div>
+            <div class="info">
+                <strong>Status:</strong> Player should now load and play!<br>
+                <strong>Fix Applied:</strong> Changed from HEAD to GET requests (MediaMTX issue)<br>
+                <strong>Expected:</strong> Video should start playing within 3-5 seconds
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Test 2: Verify HLS Stream (GET method)</h2>
+            <div class="controls">
+                <input type="text" id="hlsUrl" value="http://134.199.150.238:8888/channel1/index.m3u8" placeholder="HLS URL">
+                <button onclick="testHlsUrl()">Test URL</button>
+            </div>
+            <div class="info">
+                <strong>Result:</strong> <span id="hlsResult">Click "Test URL" to check</span>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Debugging Note</h2>
+            <div class="info">
+                <strong>Issue Found:</strong> MediaMTX doesn't support HTTP HEAD requests properly on external IPs<br>
+                <strong>Solution:</strong> Use GET requests instead of HEAD to check stream availability<br>
+                <strong>Result:</strong> <code>curl -I http://134.199.150.238:8888/channel1/index.m3u8</code> returns 404<br>
+                <strong>But:</strong> <code>curl http://134.199.150.238:8888/channel1/index.m3u8</code> returns 200 OK ✅
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function testHlsUrl() {
+            const url = document.getElementById('hlsUrl').value;
+            const resultEl = document.getElementById('hlsResult');
+            
+            resultEl.textContent = 'Testing with GET request...';
+            resultEl.style.color = '#fff';
+            
+            try {
+                // Use GET instead of HEAD
+                const res = await fetch(url);
+                if (res.ok) {
+                    const text = await res.text();
+                    resultEl.textContent = '✅ SUCCESS - HLS stream is accessible! Manifest size: ' + text.length + ' bytes';
+                    resultEl.style.color = '#00ff88';
+                } else {
+                    resultEl.textContent = '❌ FAILED - HTTP ' + res.status + ' ' + res.statusText;
+                    resultEl.style.color = '#ff6b6b';
+                }
+            } catch (err) {
+                resultEl.textContent = '❌ ERROR - ' + err.message;
+                resultEl.style.color = '#ff6b6b';
+            }
+        }
+        
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            setTimeout(testHlsUrl, 1000);
+        });
+    </script>
+</body>
+</html>

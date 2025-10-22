@@ -1,0 +1,288 @@
+const { spawn } = require("child_process");
+const EventEmitter = require("events");
+
+class Channel extends EventEmitter {
+    constructor(channelNumber) {
+        super();
+        this.channelNumber = channelNumber;
+        this.name = "Channel " + channelNumber;
+        
+        this.inputs = {
+            srt: "srt://0.0.0.0:" + (8889 + channelNumber) + "?mode=listener",
+            rtmp: "rtmp://localhost:1935/channel" + channelNumber + "/stream",
+            rtsp: "rtsp://localhost:" + (8553 + channelNumber) + "/channel" + channelNumber
+        };
+        
+        this.activeInput = null;
+        this.previewProcess = null;
+        this.outputProcesses = new Map();
+        this.isPreviewRunning = false;
+        this.startTime = null;
+        
+        this.config = {
+            previewUrl: "rtmp://localhost:1935/preview/channel" + channelNumber,
+            overlayUrl: null,
+            destinations: [],
+            bitrate: 6000,
+            width: 1920,
+            height: 1080
+        };
+        
+        this.stats = { errors: 0, lastError: null, framesProcessed: 0 };
+    }
+    
+    detectProtocol(url) {
+        if (url.startsWith('rtsp://')) return 'rtsp';
+        if (url.startsWith('rtmp://')) return 'rtmp';
+        if (url.startsWith('srt://')) return 'srt';
+        if (url.startsWith('udp://')) return 'udp';
+        if (url.startsWith('http://') || url.startsWith('https://')) return 'http';
+        if (url.startsWith('file://') || url.startsWith('/')) return 'file';
+        return 'unknown';
+    }
+    
+    startPreview(inputUrl) {
+        if (this.isPreviewRunning) return { success: false, message: "Preview already running" };
+        
+        try {
+            this.activeInput = inputUrl;
+            const protocol = this.detectProtocol(inputUrl);
+            
+            const gstCmd = [];
+            
+            // Build protocol-specific input with proper element naming
+            if (protocol === 'srt') {
+                // SRT: srtsrc → tsdemux → separate video/audio pads
+                gstCmd.push(
+                    "srtsrc", "uri=" + inputUrl, "!",
+                    "queue", "!", 
+                    "tsdemux", "name=demux"
+                );
+                
+                // Video branch from demux
+                gstCmd.push(
+                    "demux.", "!", "queue", "!", "decodebin", "!",
+                    "videoconvert", "!", "videoscale", "!",
+                    "video/x-raw,width=" + this.config.width + ",height=" + this.config.height, "!",
+                    "queue", "max-size-buffers=300", "!",
+                    "x264enc", "bitrate=" + this.config.bitrate, "tune=zerolatency", "speed-preset=veryfast", "key-int-max=60", "bframes=0", "!",
+                    "h264parse", "!", "queue", "!", "mux."
+                );
+                
+                // Audio branch from demux
+                gstCmd.push(
+                    "demux.", "!", "queue", "!", "decodebin", "!",
+                    "audioconvert", "!", "audioresample", "!",
+                    "audio/x-raw,channels=2,rate=48000", "!",
+                    "queue", "max-size-buffers=300", "!",
+                    "lamemp3enc", "bitrate=128", "!",
+                    "mpegaudioparse", "!", "queue", "!", "mux."
+                );
+                
+            } else if (protocol === 'rtsp') {
+                // RTSP with proper src naming
+                gstCmd.push(
+                    "rtspsrc", "location=" + inputUrl, "latency=100", "protocols=tcp", "name=src",
+                    "src.", "!", "queue", "!", "rtpjitterbuffer", "latency=100", "!", "decodebin", "!",
+                    "videoconvert", "!", "videoscale", "!",
+                    "video/x-raw,width=" + this.config.width + ",height=" + this.config.height, "!",
+                    "queue", "max-size-buffers=300", "!",
+                    "x264enc", "bitrate=" + this.config.bitrate, "tune=zerolatency", "speed-preset=veryfast", "key-int-max=60", "bframes=0", "!",
+                    "h264parse", "!", "queue", "!", "mux.",
+                    "src.", "!", "queue", "!", "decodebin", "!",
+                    "audioconvert", "!", "audioresample", "!",
+                    "audio/x-raw,channels=2,rate=48000", "!",
+                    "queue", "max-size-buffers=300", "!",
+                    "lamemp3enc", "bitrate=128", "!",
+                    "mpegaudioparse", "!", "queue", "!", "mux."
+                );
+                
+            } else if (protocol === 'rtmp') {
+                // RTMP - single stream, use decodebin with name
+                gstCmd.push(
+                    "rtmpsrc", "location=" + inputUrl, "!",
+                    "queue", "!", "decodebin", "name=dec"
+                );
+                
+                // Video from decoder
+                gstCmd.push(
+                    "dec.", "!", "videoconvert", "!", "videoscale", "!",
+                    "video/x-raw,width=" + this.config.width + ",height=" + this.config.height, "!",
+                    "queue", "max-size-buffers=300", "!",
+                    "x264enc", "bitrate=" + this.config.bitrate, "tune=zerolatency", "speed-preset=veryfast", "key-int-max=60", "bframes=0", "!",
+                    "h264parse", "!", "queue", "!", "mux."
+                );
+                
+                // Audio from decoder
+                gstCmd.push(
+                    "dec.", "!", "audioconvert", "!", "audioresample", "!",
+                    "audio/x-raw,channels=2,rate=48000", "!",
+                    "queue", "max-size-buffers=300", "!",
+                    "lamemp3enc", "bitrate=128", "!",
+                    "mpegaudioparse", "!", "queue", "!", "mux."
+                );
+            } else {
+                return { success: false, message: "Unsupported protocol: " + protocol };
+            }
+            
+            // Mux and output
+            gstCmd.push(
+                "flvmux", "name=mux", "streamable=true", "!",
+                "queue", "!",
+                "rtmpsink", "location=" + this.config.previewUrl
+            );
+            
+            console.log("[" + this.name + "] Starting GStreamer preview from " + protocol.toUpperCase());
+            console.log("[" + this.name + "] Input:", inputUrl);
+            console.log("[" + this.name + "] Preview:", this.config.previewUrl);
+            console.log("[" + this.name + "] Pipeline:", gstCmd.join(" "));
+            
+            this.previewProcess = spawn("gst-launch-1.0", gstCmd);
+            
+            this.previewProcess.stderr.on("data", (d) => {
+                const msg = d.toString().trim();
+                if (msg.includes("ERROR")) {
+                    this.stats.errors++;
+                    this.stats.lastError = msg;
+                    console.error("[" + this.name + "]", msg);
+                } else if (msg.includes("WARNING")) {
+                    console.warn("[" + this.name + "]", msg);
+                } else if (msg && !msg.includes("Setting pipeline")) {
+                    console.log("[" + this.name + "]", msg);
+                }
+            });
+            
+            this.previewProcess.on("close", (code) => {
+                console.log("[" + this.name + "] Preview exited:", code);
+                this.isPreviewRunning = false;
+                this.activeInput = null;
+                this.emit('preview-stopped');
+            });
+            
+            this.isPreviewRunning = true;
+            this.emit('preview-started');
+            return { success: true, message: "GStreamer preview started", input: inputUrl, protocol: protocol };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
+    }
+    
+    stopPreview() {
+        if (!this.isPreviewRunning) return { success: false, message: "Preview not running" };
+        if (this.previewProcess) {
+            this.previewProcess.kill("SIGINT");
+            setTimeout(() => { 
+                if (this.previewProcess && !this.previewProcess.killed) {
+                    this.previewProcess.kill("SIGKILL"); 
+                }
+            }, 3000);
+        }
+        this.isPreviewRunning = false;
+        this.activeInput = null;
+        this.emit('preview-stopped');
+        return { success: true, message: "Preview stopped" };
+    }
+    
+    startDestination(destId) {
+        const dest = this.config.destinations.find(d => d.id === destId);
+        if (!dest) return { success: false, message: "Destination not found" };
+        if (!this.isPreviewRunning) return { success: false, message: "Start preview first!" };
+        if (this.outputProcesses.has(destId)) return { success: false, message: "Already streaming" };
+        
+        try {
+            const destProtocol = this.detectProtocol(dest.url);
+            const inputProtocol = this.detectProtocol(this.activeInput);
+            
+            // Use FFmpeg for simplicity on outputs
+            const outputCmd = ["-re", "-i", this.activeInput, "-c:v", "libx264", "-preset", "veryfast", "-b:v", "2500k", "-maxrate", "2500k", "-bufsize", "5000k", "-c:a", "aac", "-b:a", "128k", "-ar", "44100"];
+            
+            if (destProtocol === 'srt') {
+                outputCmd.push("-f", "mpegts", dest.url);
+            } else if (destProtocol === 'rtmp') {
+                outputCmd.push("-f", "flv", dest.url);
+            } else {
+                outputCmd.push(dest.url);
+            }
+            
+            console.log("[" + this.name + "] Starting output to:", dest.name);
+            
+            const process = spawn("ffmpeg", outputCmd);
+            
+            process.stderr.on("data", (d) => {
+                const msg = d.toString().trim();
+                if (msg.includes("error")) console.error("[" + this.name + " → " + dest.name + "]", msg);
+            });
+            
+            process.on("close", (code) => {
+                console.log("[" + this.name + " → " + dest.name + "] exited:", code);
+                this.outputProcesses.delete(destId);
+                dest.isStreaming = false;
+            });
+            
+            this.outputProcesses.set(destId, process);
+            dest.isStreaming = true;
+            if (!this.startTime) this.startTime = Date.now();
+            return { success: true, message: "Streaming to " + dest.name };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
+    }
+    
+    stopDestination(destId) {
+        const dest = this.config.destinations.find(d => d.id === destId);
+        if (!dest) return { success: false, message: "Destination not found" };
+        const process = this.outputProcesses.get(destId);
+        if (!process) return { success: false, message: "Not streaming" };
+        process.kill("SIGINT");
+        this.outputProcesses.delete(destId);
+        dest.isStreaming = false;
+        if (this.outputProcesses.size === 0) this.startTime = null;
+        return { success: true, message: "Stopped" };
+    }
+    
+    stopAllDestinations() {
+        for (const destId of Array.from(this.outputProcesses.keys())) this.stopDestination(destId);
+        return { success: true };
+    }
+    
+    setOverlay(url) {
+        this.config.overlayUrl = url || null;
+        return { success: true, message: "Overlay coming soon" };
+    }
+    
+    addDestination(url, name, protocol) {
+        const dest = {
+            id: Date.now().toString() + "_" + this.channelNumber,
+            url, name: name || "Dest " + (this.config.destinations.length + 1),
+            protocol: protocol || this.detectProtocol(url),
+            enabled: true, isStreaming: false
+        };
+        this.config.destinations.push(dest);
+        return dest;
+    }
+    
+    removeDestination(id) {
+        this.stopDestination(id);
+        this.config.destinations = this.config.destinations.filter(d => d.id !== id);
+    }
+    
+    toggleDestination(id) {
+        const d = this.config.destinations.find(x => x.id === id);
+        if (d) d.enabled = !d.enabled;
+        return d;
+    }
+    
+    getStatus() {
+        return {
+            channelNumber: this.channelNumber, name: this.name,
+            inputs: this.inputs, activeInput: this.activeInput,
+            isPreviewRunning: this.isPreviewRunning,
+            activeStreams: this.outputProcesses.size,
+            uptime: this.startTime ? Math.floor((Date.now() - this.startTime) / 1000) : 0,
+            config: this.config, stats: this.stats,
+            destinations: this.config.destinations.map(d => ({ ...d, isStreaming: this.outputProcesses.has(d.id) }))
+        };
+    }
+}
+
+module.exports = Channel;
