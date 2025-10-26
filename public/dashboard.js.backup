@@ -1,0 +1,161 @@
+async function checkAuth() {
+    try {
+        const response = await fetch('/api/auth/check');
+        const data = await response.json();
+        if (!data.authenticated) window.location.href = '/';
+    } catch (error) {
+        window.location.href = '/';
+    }
+}
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/';
+});
+
+async function initDashboard() {
+    await checkAuth();
+    createChannelCards();
+    await refreshAllChannels();
+    await refreshCosts();
+    setInterval(refreshAllChannels, 30000);
+    setInterval(refreshCosts, 30000);
+}
+
+function createChannelCards() {
+    const grid = document.querySelector('.channels-grid');
+    for (let i = 1; i <= 5; i++) {
+        const card = document.createElement('div');
+        card.className = 'channel-card';
+        card.id = `channel-${i}`;
+        card.innerHTML = `
+            <div class="channel-header">
+                <h3>Channel ${i}</h3>
+                <span class="channel-status" id="status-${i}">UNKNOWN</span>
+            </div>
+            <div class="channel-body">
+                <div class="channel-info">
+                    <p><strong>State:</strong> <span id="state-${i}">-</span></p>
+                    <p><strong>Channel ID:</strong> <span id="id-${i}">Not configured</span></p>
+                </div>
+                <div class="channel-controls">
+                    <button class="btn btn-success" onclick="startChannel(${i})" id="start-${i}">Start Channel</button>
+                    <button class="btn btn-danger" onclick="stopChannel(${i})" id="stop-${i}">Stop Channel</button>
+                </div>
+            </div>
+        `;
+        grid.appendChild(card);
+    }
+}
+
+async function startChannel(channelNum) {
+    if (!confirm(`Start Channel ${channelNum}?\n\nThis will begin AWS billing at ~$2/hour.`)) return;
+    const btn = document.getElementById(`start-${channelNum}`);
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+    try {
+        const response = await fetch(`/api/channel/${channelNum}/start`, { method: 'POST' });
+        const result = await response.json();
+        if (result.success) {
+            alert(`Channel ${channelNum} is starting. This may take 1-2 minutes.`);
+            pollChannelStatus(channelNum);
+        } else {
+            alert(`Failed to start channel: ${result.error}`);
+            btn.disabled = false;
+            btn.textContent = 'Start Channel';
+        }
+    } catch (error) {
+        alert('Network error');
+        btn.disabled = false;
+        btn.textContent = 'Start Channel';
+    }
+}
+
+async function stopChannel(channelNum) {
+    if (!confirm(`Stop Channel ${channelNum}?\n\nThis will end AWS billing.`)) return;
+    const btn = document.getElementById(`stop-${channelNum}`);
+    btn.disabled = true;
+    btn.textContent = 'Stopping...';
+    try {
+        const response = await fetch(`/api/channel/${channelNum}/stop`, { method: 'POST' });
+        const result = await response.json();
+        if (result.success) {
+            alert(`Channel ${channelNum} is stopping.`);
+            pollChannelStatus(channelNum);
+        } else {
+            alert(`Failed: ${result.error}`);
+            btn.disabled = false;
+            btn.textContent = 'Stop Channel';
+        }
+    } catch (error) {
+        alert('Network error');
+        btn.disabled = false;
+        btn.textContent = 'Stop Channel';
+    }
+}
+
+function pollChannelStatus(channelNum) {
+    const interval = setInterval(async () => {
+        const status = await getChannelStatus(channelNum);
+        if (status && (status.state === 'RUNNING' || status.state === 'IDLE')) {
+            clearInterval(interval);
+            updateChannelUI(channelNum, status);
+        }
+    }, 5000);
+    setTimeout(() => clearInterval(interval), 180000);
+}
+
+async function getChannelStatus(channelNum) {
+    try {
+        const response = await fetch(`/api/channel/${channelNum}/status`);
+        return await response.json();
+    } catch (error) {
+        return null;
+    }
+}
+
+async function refreshAllChannels() {
+    for (let i = 1; i <= 5; i++) {
+        const status = await getChannelStatus(i);
+        if (status) updateChannelUI(i, status);
+    }
+}
+
+function updateChannelUI(channelNum, status) {
+    const statusSpan = document.getElementById(`status-${channelNum}`);
+    const stateSpan = document.getElementById(`state-${channelNum}`);
+    const idSpan = document.getElementById(`id-${channelNum}`);
+    const startBtn = document.getElementById(`start-${channelNum}`);
+    const stopBtn = document.getElementById(`stop-${channelNum}`);
+
+    statusSpan.textContent = status.state || 'UNKNOWN';
+    statusSpan.className = 'channel-status';
+    if (status.state === 'RUNNING') statusSpan.classList.add('status-running');
+    else if (status.state === 'IDLE') statusSpan.classList.add('status-idle');
+    else if (status.state === 'STARTING' || status.state === 'STOPPING') statusSpan.classList.add('status-transition');
+    else statusSpan.classList.add('status-error');
+
+    stateSpan.textContent = status.state || 'UNKNOWN';
+    idSpan.textContent = status.channelId || 'Not configured';
+
+    startBtn.disabled = (status.state === 'RUNNING' || status.state === 'STARTING' || status.state === 'NOT_CONFIGURED');
+    startBtn.textContent = status.state === 'STARTING' ? 'Starting...' : 'Start Channel';
+
+    stopBtn.disabled = (status.state === 'IDLE' || status.state === 'STOPPING' || status.state === 'NOT_CONFIGURED');
+    stopBtn.textContent = status.state === 'STOPPING' ? 'Stopping...' : 'Stop Channel';
+}
+
+async function refreshCosts() {
+    try {
+        const response = await fetch('/api/costs');
+        const costs = await response.json();
+        document.getElementById('runningChannels').textContent = costs.runningChannels;
+        document.getElementById('costPerHour').textContent = `$${costs.costPerHour.toFixed(2)}`;
+        document.getElementById('costPerDay').textContent = `$${costs.costPerDay.toFixed(2)}`;
+        document.getElementById('costPerWeek').textContent = `$${costs.costPerWeek.toFixed(2)}`;
+    } catch (error) {
+        console.error('Error refreshing costs:', error);
+    }
+}
+
+initDashboard();

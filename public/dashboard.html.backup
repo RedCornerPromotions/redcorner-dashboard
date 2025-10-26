@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Red Corner - AWS Stream Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <h1>Red Corner - AWS MediaLive Dashboard</h1>
+            <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+        </header>
+        <div class="cost-monitor">
+            <h3>Cost Monitor</h3>
+            <div class="cost-grid">
+                <div class="cost-item">
+                    <span class="cost-label">Running Channels:</span>
+                    <span class="cost-value" id="runningChannels">0</span>
+                </div>
+                <div class="cost-item">
+                    <span class="cost-label">Cost/Hour:</span>
+                    <span class="cost-value" id="costPerHour">$0.00</span>
+                </div>
+                <div class="cost-item">
+                    <span class="cost-label">Cost/Day:</span>
+                    <span class="cost-value" id="costPerDay">$0.00</span>
+                </div>
+                <div class="cost-item">
+                    <span class="cost-label">Cost/Week:</span>
+                    <span class="cost-value" id="costPerWeek">$0.00</span>
+                </div>
+            </div>
+        </div>
+        <div class="channels-grid"></div>
+    </div>
+    <script src="dashboard.js"></script>
+</body>
+</html>

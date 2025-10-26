@@ -1,0 +1,760 @@
+const { MediaLiveClient, StartChannelCommand, StopChannelCommand, DescribeChannelCommand, UpdateChannelCommand, BatchUpdateScheduleCommand } = require("@aws-sdk/client-medialive");
+
+class AWSMediaLiveManager {
+    constructor() {
+        this.client = new MediaLiveClient({
+            region: process.env.AWS_REGION || "ap-southeast-2",
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+            }
+        });
+
+        this.channelMap = {
+            1: process.env.AWS_CHANNEL_1_ID || null,
+            2: process.env.AWS_CHANNEL_2_ID || null,
+            3: process.env.AWS_CHANNEL_3_ID || null,
+            4: process.env.AWS_CHANNEL_4_ID || null,
+            5: process.env.AWS_CHANNEL_5_ID || null
+        };
+
+        this.channelNames = {
+            1: process.env.CHANNEL_1_NAME || "Channel 1",
+            2: process.env.CHANNEL_2_NAME || "Channel 2",
+            3: process.env.CHANNEL_3_NAME || "Channel 3",
+            4: process.env.CHANNEL_4_NAME || "Channel 4",
+            5: process.env.CHANNEL_5_NAME || "Channel 5"
+        };
+
+        this.costPerChannelHour = 2.0;
+
+        console.log('[AWS MediaLive Manager] Initialized');
+        const configured = Object.values(this.channelMap).filter(id => id).length;
+        console.log(`[AWS MediaLive Manager] Channels configured: ${configured}`);
+    }
+
+    async startChannel(channelNumber) {
+        const channelId = this.channelMap[channelNumber];
+        if (!channelId) {
+            return { success: false, error: `Channel ${channelNumber} not configured` };
+        }
+        try {
+            const command = new StartChannelCommand({ ChannelId: channelId });
+            await this.client.send(command);
+            console.log(`[AWS] Started channel ${channelNumber} (${channelId})`);
+            return { success: true, channelNumber, channelId, state: 'STARTING' };
+        } catch (error) {
+            console.error(`[AWS] Error starting channel ${channelNumber}:`, error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async stopChannel(channelNumber) {
+        const channelId = this.channelMap[channelNumber];
+        if (!channelId) {
+            return { success: false, error: `Channel ${channelNumber} not configured` };
+        }
+        try {
+            const command = new StopChannelCommand({ ChannelId: channelId });
+            await this.client.send(command);
+            console.log(`[AWS] Stopped channel ${channelNumber} (${channelId})`);
+            return { success: true, channelNumber, channelId, state: 'STOPPING' };
+        } catch (error) {
+            console.error(`[AWS] Error stopping channel ${channelNumber}:`, error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async getChannelStatus(channelNumber) {
+        const channelId = this.channelMap[channelNumber];
+        if (!channelId) {
+            return {
+                success: false, state: 'NOT_CONFIGURED',
+                channelNumber, name: this.channelNames[channelNumber]
+            };
+        }
+        try {
+            const command = new DescribeChannelCommand({ ChannelId: channelId });
+            const response = await this.client.send(command);
+            return {
+                success: true, channelNumber, channelId,
+                name: this.channelNames[channelNumber],
+                state: response.State,
+                pipelinesRunning: response.PipelinesRunningCount || 0
+            };
+        } catch (error) {
+            return {
+                success: false, error: error.message,
+                state: 'ERROR', channelNumber,
+                name: this.channelNames[channelNumber]
+            };
+        }
+    }
+
+    async updateOverlay(channelNumber, enabled, overlayUrl = '') {
+        const channelId = this.channelMap[channelNumber];
+        if (!channelId) {
+            return { success: false, error: `Channel ${channelNumber} not configured` };
+        }
+
+        try {
+            const describeCmd = new DescribeChannelCommand({ ChannelId: channelId });
+            const currentConfig = await this.client.send(describeCmd);
+
+            if (currentConfig.State !== 'IDLE') {
+                return {
+                    success: false,
+                    error: `Channel must be IDLE. Current: ${currentConfig.State}. Stop channel first.`
+                };
+            }
+
+            const encoderSettings = currentConfig.EncoderSettings;
+            
+            if (!encoderSettings.GlobalConfiguration) {
+                encoderSettings.GlobalConfiguration = {};
+            }
+
+            if (enabled && overlayUrl) {
+                encoderSettings.GlobalConfiguration.MotionGraphicsConfiguration = {
+                    MotionGraphicsInsertion: 'ENABLED',
+                    MotionGraphicsSettings: {
+                        HtmlMotionGraphicsSettings: {
+                            Uri: overlayUrl
+                        }
+                    }
+                };
+            } else {
+                encoderSettings.GlobalConfiguration.MotionGraphicsConfiguration = {
+                    MotionGraphicsInsertion: 'DISABLED'
+                };
+            }
+
+            const updateCommand = new UpdateChannelCommand({
+                ChannelId: channelId,
+                EncoderSettings: encoderSettings,
+                InputAttachments: currentConfig.InputAttachments,
+                Destinations: currentConfig.Destinations
+            });
+
+            await this.client.send(updateCommand);
+
+            console.log(`[AWS] Updated overlay for channel ${channelNumber}: ${enabled ? overlayUrl : 'disabled'}`);
+
+            return {
+                success: true,
+                channelNumber,
+                overlayEnabled: enabled,
+                overlayUrl: enabled ? overlayUrl : null
+            };
+        } catch (error) {
+            console.error(`[AWS] Error updating overlay:`, error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async getEstimatedCost() {
+        let runningCount = 0;
+        for (let i = 1; i <= 5; i++) {
+            const status = await this.getChannelStatus(i);
+            if (status.state === 'RUNNING') runningCount++;
+        }
+        return {
+            runningChannels: runningCount,
+            costPerHour: runningCount * this.costPerChannelHour,
+            costPerDay: runningCount * this.costPerChannelHour * 24,
+            costPerWeek: runningCount * this.costPerChannelHour * 24 * 7
+        };
+    }
+
+    /**
+     * Configure RTMP destination for a channel
+     * Channel must be IDLE to update configuration
+     */
+    async configureRTMPDestination(channelNumber, rtmpUrl, streamKey, destinationName = 'RTMP-Output') {
+        const channelId = this.channelMap[channelNumber];
+
+        if (!channelId) {
+            return {
+                success: false,
+                error: `Channel ${channelNumber} not configured`
+            };
+        }
+
+        try {
+            const describeCmd = new DescribeChannelCommand({ ChannelId: channelId });
+            const currentConfig = await this.client.send(describeCmd);
+
+            if (currentConfig.State !== 'IDLE') {
+                return {
+                    success: false,
+                    error: `Channel must be IDLE to configure destination. Current state: ${currentConfig.State}`
+                };
+            }
+
+            const destinations = currentConfig.Destinations || [];
+            const outputGroups = currentConfig.EncoderSettings.OutputGroups || [];
+
+            const filteredOutputGroups = outputGroups.filter(og => {
+                const name = og.Name || '';
+                return !name.includes('RTMP') && !name.includes('SRT') && !name.includes('rtmp') && !name.includes('srt');
+            });
+
+            const rtmpOutputGroup = {
+                Name: destinationName,
+                OutputGroupSettings: {
+                    RtmpGroupSettings: {
+                        AuthenticationScheme: 'COMMON',
+                        CacheFullBehavior: 'DISCONNECT_IMMEDIATELY',
+                        CacheLength: 30,
+                        CaptionData: 'ALL',
+                        RestartDelay: 15
+                    }
+                },
+                Outputs: [{
+                    OutputName: '_1',
+                    OutputSettings: {
+                        RtmpOutputSettings: {
+                            CertificateMode: 'SELF_SIGNED',
+                            ConnectionRetryInterval: 2,
+                            NumRetries: 10,
+                            Destination: {
+                                DestinationRefId: 'rtmp-destination'
+                            }
+                        }
+                    },
+                    VideoDescriptionName: 'video_1',
+                    AudioDescriptionNames: ['audio_1']
+                }]
+            };
+
+            filteredOutputGroups.push(rtmpOutputGroup);
+
+            const rtmpDestination = {
+                Id: 'rtmp-destination',
+                Settings: [{
+                    Url: `${rtmpUrl}/${streamKey}`
+                }]
+            };
+
+            const updatedDestinations = destinations.filter(d => d.Id !== 'rtmp-destination');
+            updatedDestinations.push(rtmpDestination);
+
+            const updateCommand = new UpdateChannelCommand({
+                ChannelId: channelId,
+                Destinations: updatedDestinations,
+                EncoderSettings: {
+                    ...currentConfig.EncoderSettings,
+                    OutputGroups: filteredOutputGroups
+                }
+            });
+
+            await this.client.send(updateCommand);
+
+            console.log(`[AWS MediaLive] Configured RTMP destination for channel ${channelNumber}: ${rtmpUrl}`);
+
+            return {
+                success: true,
+                channelNumber,
+                destinationType: 'RTMP',
+                destinationName,
+                url: rtmpUrl
+            };
+
+        } catch (error) {
+            console.error(`[AWS MediaLive] Error configuring RTMP destination for channel ${channelNumber}:`, error.message);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Configure SRT destination for a channel
+     */
+    async configureSRTDestination(channelNumber, srtUrl, streamId, destinationName = 'SRT-Output') {
+        const channelId = this.channelMap[channelNumber];
+
+        if (!channelId) {
+            return {
+                success: false,
+                error: `Channel ${channelNumber} not configured`
+            };
+        }
+
+        try {
+            const describeCmd = new DescribeChannelCommand({ ChannelId: channelId });
+            const currentConfig = await this.client.send(describeCmd);
+
+            if (currentConfig.State !== 'IDLE') {
+                return {
+                    success: false,
+                    error: `Channel must be IDLE to configure destination. Current state: ${currentConfig.State}`
+                };
+            }
+
+            const srtMatch = srtUrl.match(/srt:\/\/([^:]+):(\d+)/);
+            if (!srtMatch) {
+                return {
+                    success: false,
+                    error: 'Invalid SRT URL format. Expected: srt://host:port'
+                };
+            }
+
+            const [, host, port] = srtMatch;
+
+            const destinations = currentConfig.Destinations || [];
+            const outputGroups = currentConfig.EncoderSettings.OutputGroups || [];
+
+            const filteredOutputGroups = outputGroups.filter(og => {
+                const name = og.Name || '';
+                return !name.includes('RTMP') && !name.includes('SRT') && !name.includes('rtmp') && !name.includes('srt');
+            });
+
+            const srtOutputGroup = {
+                Name: destinationName,
+                OutputGroupSettings: {
+                    UdpGroupSettings: {
+                        TimedMetadataId3Frame: 'PRIV',
+                        TimedMetadataId3Period: 10
+                    }
+                },
+                Outputs: [{
+                    OutputName: '_1',
+                    OutputSettings: {
+                        UdpOutputSettings: {
+                            Destination: {
+                                DestinationRefId: 'srt-destination'
+                            },
+                            ContainerSettings: {
+                                M2tsSettings: {
+                                    AudioBufferModel: 'ATSC',
+                                    AudioFramesPerPes: 2,
+                                    AudioStreamType: 'DVB',
+                                    Bitrate: 2000000,
+                                    BufferModel: 'MULTIPLEX',
+                                    CcDescriptor: 'DISABLED',
+                                    EbpPlacement: 'VIDEO_AND_AUDIO_PIDS',
+                                    NielsenId3Behavior: 'NO_PASSTHROUGH',
+                                    PcrControl: 'PCR_EVERY_PES_PACKET',
+                                    PmtInterval: 100,
+                                    ProgramNum: 1,
+                                    RateMode: 'CBR',
+                                    SegmentationStyle: 'MAINTAIN_CADENCE',
+                                    TimedMetadataBehavior: 'NO_PASSTHROUGH'
+                                }
+                            },
+                            FecOutputSettings: {
+                                ColumnDepth: 4,
+                                IncludeFec: 'COLUMN',
+                                RowLength: 5
+                            }
+                        }
+                    },
+                    VideoDescriptionName: 'video_1',
+                    AudioDescriptionNames: ['audio_1']
+                }]
+            };
+
+            filteredOutputGroups.push(srtOutputGroup);
+
+            const srtDestination = {
+                Id: 'srt-destination',
+                Settings: [{
+                    Url: `udp://${host}:${port}?pkt_size=1316&mode=caller&streamid=${encodeURIComponent(streamId)}`
+                }]
+            };
+
+            const updatedDestinations = destinations.filter(d => d.Id !== 'srt-destination');
+            updatedDestinations.push(srtDestination);
+
+            const updateCommand = new UpdateChannelCommand({
+                ChannelId: channelId,
+                Destinations: updatedDestinations,
+                EncoderSettings: {
+                    ...currentConfig.EncoderSettings,
+                    OutputGroups: filteredOutputGroups
+                }
+            });
+
+            await this.client.send(updateCommand);
+
+            console.log(`[AWS MediaLive] Configured SRT destination for channel ${channelNumber}: ${srtUrl}`);
+
+            return {
+                success: true,
+                channelNumber,
+                destinationType: 'SRT',
+                destinationName,
+                url: srtUrl
+            };
+
+        } catch (error) {
+            console.error(`[AWS MediaLive] Error configuring SRT destination for channel ${channelNumber}:`, error.message);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Remove configured destination
+     */
+    async removeDestination(channelNumber) {
+        const channelId = this.channelMap[channelNumber];
+
+        if (!channelId) {
+            return {
+                success: false,
+                error: `Channel ${channelNumber} not configured`
+            };
+        }
+
+        try {
+            const describeCmd = new DescribeChannelCommand({ ChannelId: channelId });
+            const currentConfig = await this.client.send(describeCmd);
+
+            if (currentConfig.State !== 'IDLE') {
+                return {
+                    success: false,
+                    error: `Channel must be IDLE to remove destination. Current state: ${currentConfig.State}`
+                };
+            }
+
+            const outputGroups = currentConfig.EncoderSettings.OutputGroups || [];
+            const filteredOutputGroups = outputGroups.filter(og => {
+                const name = og.Name || '';
+                return !name.includes('RTMP') && !name.includes('SRT') && !name.includes('rtmp') && !name.includes('srt');
+            });
+
+            const destinations = currentConfig.Destinations || [];
+            const filteredDestinations = destinations.filter(d =>
+                d.Id !== 'rtmp-destination' && d.Id !== 'srt-destination'
+            );
+
+            const updateCommand = new UpdateChannelCommand({
+                ChannelId: channelId,
+                Destinations: filteredDestinations,
+                EncoderSettings: {
+                    ...currentConfig.EncoderSettings,
+                    OutputGroups: filteredOutputGroups
+                }
+            });
+
+            await this.client.send(updateCommand);
+
+            console.log(`[AWS MediaLive] Removed destination for channel ${channelNumber}`);
+
+            return {
+                success: true,
+                channelNumber,
+                message: 'Destination removed successfully'
+            };
+
+        } catch (error) {
+            console.error(`[AWS MediaLive] Error removing destination for channel ${channelNumber}:`, error.message);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Configure RTMP destination for a channel
+     * Channel must be IDLE to update configuration
+     */
+    async configureRTMPDestination(channelNumber, rtmpUrl, streamKey, destinationName = 'RTMP-Output') {
+        const channelId = this.channelMap[channelNumber];
+
+        if (!channelId) {
+            return {
+                success: false,
+                error: `Channel ${channelNumber} not configured`
+            };
+        }
+
+        try {
+            const describeCmd = new DescribeChannelCommand({ ChannelId: channelId });
+            const currentConfig = await this.client.send(describeCmd);
+
+            if (currentConfig.State !== 'IDLE') {
+                return {
+                    success: false,
+                    error: `Channel must be IDLE to configure destination. Current state: ${currentConfig.State}`
+                };
+            }
+
+            const destinations = currentConfig.Destinations || [];
+            const outputGroups = currentConfig.EncoderSettings.OutputGroups || [];
+
+            const filteredOutputGroups = outputGroups.filter(og => {
+                const name = og.Name || '';
+                return !name.includes('RTMP') && !name.includes('SRT') && !name.includes('rtmp') && !name.includes('srt');
+            });
+
+            const rtmpOutputGroup = {
+                Name: destinationName,
+                OutputGroupSettings: {
+                    RtmpGroupSettings: {
+                        AuthenticationScheme: 'COMMON',
+                        CacheFullBehavior: 'DISCONNECT_IMMEDIATELY',
+                        CacheLength: 30,
+                        CaptionData: 'ALL',
+                        RestartDelay: 15
+                    }
+                },
+                Outputs: [{
+                    OutputName: '_1',
+                    OutputSettings: {
+                        RtmpOutputSettings: {
+                            CertificateMode: 'SELF_SIGNED',
+                            ConnectionRetryInterval: 2,
+                            NumRetries: 10,
+                            Destination: {
+                                DestinationRefId: 'rtmp-destination'
+                            }
+                        }
+                    },
+                    VideoDescriptionName: 'video_1',
+                    AudioDescriptionNames: ['audio_1']
+                }]
+            };
+
+            filteredOutputGroups.push(rtmpOutputGroup);
+
+            const rtmpDestination = {
+                Id: 'rtmp-destination',
+                Settings: [{
+                    Url: `${rtmpUrl}/${streamKey}`
+                }]
+            };
+
+            const updatedDestinations = destinations.filter(d => d.Id !== 'rtmp-destination');
+            updatedDestinations.push(rtmpDestination);
+
+            const updateCommand = new UpdateChannelCommand({
+                ChannelId: channelId,
+                Destinations: updatedDestinations,
+                EncoderSettings: {
+                    ...currentConfig.EncoderSettings,
+                    OutputGroups: filteredOutputGroups
+                }
+            });
+
+            await this.client.send(updateCommand);
+
+            console.log(`[AWS MediaLive] Configured RTMP destination for channel ${channelNumber}: ${rtmpUrl}`);
+
+            return {
+                success: true,
+                channelNumber,
+                destinationType: 'RTMP',
+                destinationName,
+                url: rtmpUrl
+            };
+
+        } catch (error) {
+            console.error(`[AWS MediaLive] Error configuring RTMP destination for channel ${channelNumber}:`, error.message);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Configure SRT destination for a channel
+     */
+    async configureSRTDestination(channelNumber, srtUrl, streamId, destinationName = 'SRT-Output') {
+        const channelId = this.channelMap[channelNumber];
+
+        if (!channelId) {
+            return {
+                success: false,
+                error: `Channel ${channelNumber} not configured`
+            };
+        }
+
+        try {
+            const describeCmd = new DescribeChannelCommand({ ChannelId: channelId });
+            const currentConfig = await this.client.send(describeCmd);
+
+            if (currentConfig.State !== 'IDLE') {
+                return {
+                    success: false,
+                    error: `Channel must be IDLE to configure destination. Current state: ${currentConfig.State}`
+                };
+            }
+
+            const srtMatch = srtUrl.match(/srt:\/\/([^:]+):(\d+)/);
+            if (!srtMatch) {
+                return {
+                    success: false,
+                    error: 'Invalid SRT URL format. Expected: srt://host:port'
+                };
+            }
+
+            const [, host, port] = srtMatch;
+
+            const destinations = currentConfig.Destinations || [];
+            const outputGroups = currentConfig.EncoderSettings.OutputGroups || [];
+
+            const filteredOutputGroups = outputGroups.filter(og => {
+                const name = og.Name || '';
+                return !name.includes('RTMP') && !name.includes('SRT') && !name.includes('rtmp') && !name.includes('srt');
+            });
+
+            const srtOutputGroup = {
+                Name: destinationName,
+                OutputGroupSettings: {
+                    UdpGroupSettings: {
+                        TimedMetadataId3Frame: 'PRIV',
+                        TimedMetadataId3Period: 10
+                    }
+                },
+                Outputs: [{
+                    OutputName: '_1',
+                    OutputSettings: {
+                        UdpOutputSettings: {
+                            Destination: {
+                                DestinationRefId: 'srt-destination'
+                            },
+                            ContainerSettings: {
+                                M2tsSettings: {
+                                    AudioBufferModel: 'ATSC',
+                                    AudioFramesPerPes: 2,
+                                    AudioStreamType: 'DVB',
+                                    Bitrate: 2000000,
+                                    BufferModel: 'MULTIPLEX',
+                                    CcDescriptor: 'DISABLED',
+                                    EbpPlacement: 'VIDEO_AND_AUDIO_PIDS',
+                                    NielsenId3Behavior: 'NO_PASSTHROUGH',
+                                    PcrControl: 'PCR_EVERY_PES_PACKET',
+                                    PmtInterval: 100,
+                                    ProgramNum: 1,
+                                    RateMode: 'CBR',
+                                    SegmentationStyle: 'MAINTAIN_CADENCE',
+                                    TimedMetadataBehavior: 'NO_PASSTHROUGH'
+                                }
+                            },
+                            FecOutputSettings: {
+                                ColumnDepth: 4,
+                                IncludeFec: 'COLUMN',
+                                RowLength: 5
+                            }
+                        }
+                    },
+                    VideoDescriptionName: 'video_1',
+                    AudioDescriptionNames: ['audio_1']
+                }]
+            };
+
+            filteredOutputGroups.push(srtOutputGroup);
+
+            const srtDestination = {
+                Id: 'srt-destination',
+                Settings: [{
+                    Url: `udp://${host}:${port}?pkt_size=1316&mode=caller&streamid=${encodeURIComponent(streamId)}`
+                }]
+            };
+
+            const updatedDestinations = destinations.filter(d => d.Id !== 'srt-destination');
+            updatedDestinations.push(srtDestination);
+
+            const updateCommand = new UpdateChannelCommand({
+                ChannelId: channelId,
+                Destinations: updatedDestinations,
+                EncoderSettings: {
+                    ...currentConfig.EncoderSettings,
+                    OutputGroups: filteredOutputGroups
+                }
+            });
+
+            await this.client.send(updateCommand);
+
+            console.log(`[AWS MediaLive] Configured SRT destination for channel ${channelNumber}: ${srtUrl}`);
+
+            return {
+                success: true,
+                channelNumber,
+                destinationType: 'SRT',
+                destinationName,
+                url: srtUrl
+            };
+
+        } catch (error) {
+            console.error(`[AWS MediaLive] Error configuring SRT destination for channel ${channelNumber}:`, error.message);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Remove configured destination
+     */
+    async removeDestination(channelNumber) {
+        const channelId = this.channelMap[channelNumber];
+
+        if (!channelId) {
+            return {
+                success: false,
+                error: `Channel ${channelNumber} not configured`
+            };
+        }
+
+        try {
+            const describeCmd = new DescribeChannelCommand({ ChannelId: channelId });
+            const currentConfig = await this.client.send(describeCmd);
+
+            if (currentConfig.State !== 'IDLE') {
+                return {
+                    success: false,
+                    error: `Channel must be IDLE to remove destination. Current state: ${currentConfig.State}`
+                };
+            }
+
+            const outputGroups = currentConfig.EncoderSettings.OutputGroups || [];
+            const filteredOutputGroups = outputGroups.filter(og => {
+                const name = og.Name || '';
+                return !name.includes('RTMP') && !name.includes('SRT') && !name.includes('rtmp') && !name.includes('srt');
+            });
+
+            const destinations = currentConfig.Destinations || [];
+            const filteredDestinations = destinations.filter(d =>
+                d.Id !== 'rtmp-destination' && d.Id !== 'srt-destination'
+            );
+
+            const updateCommand = new UpdateChannelCommand({
+                ChannelId: channelId,
+                Destinations: filteredDestinations,
+                EncoderSettings: {
+                    ...currentConfig.EncoderSettings,
+                    OutputGroups: filteredOutputGroups
+                }
+            });
+
+            await this.client.send(updateCommand);
+
+            console.log(`[AWS MediaLive] Removed destination for channel ${channelNumber}`);
+
+            return {
+                success: true,
+                channelNumber,
+                message: 'Destination removed successfully'
+            };
+
+        } catch (error) {
+            console.error(`[AWS MediaLive] Error removing destination for channel ${channelNumber}:`, error.message);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+}
+
+module.exports = AWSMediaLiveManager;
