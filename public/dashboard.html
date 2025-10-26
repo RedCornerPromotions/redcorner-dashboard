@@ -567,22 +567,36 @@
         async function addDestination(channelNum) {
             const name = document.getElementById('destName' + channelNum).value.trim();
             const url = document.getElementById('destUrl' + channelNum).value.trim();
-            
+
             if (!url) return showToast('❌ URL required');
-            
+
             try {
-                await fetch(API + '/channel/' + channelNum + '/destination', {
+                const res = await fetch(API + '/channel/' + channelNum + '/destination', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({ name: name || 'Destination', url })
                 });
+
+                const data = await res.json();
+
+                if (res.status === 401) {
+                    showToast('❌ Session expired - please login again');
+                    setTimeout(() => { window.location.href = '/'; }, 2000);
+                    return;
+                }
+
+                if (!res.ok) {
+                    showToast('❌ ' + (data.error || data.message || 'Error adding destination'));
+                    return;
+                }
+
                 showToast('✅ Destination added');
                 document.getElementById('destName' + channelNum).value = '';
                 document.getElementById('destUrl' + channelNum).value = '';
                 fetchStatus();
             } catch (err) {
-                showToast('❌ Error adding destination');
+                showToast('❌ Error: ' + err.message);
             }
         }
 
