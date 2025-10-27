@@ -154,7 +154,7 @@ app.post('/api/channel/:num/destination/:id/toggle', (req, res) => {
 // Serve static files for specific allowed files
 app.use(express.static('public'));
 
-app.listen(5000, '0.0.0.0', () => {
-    console.log('🔐 API running on http://134.199.150.238:5000');
+app.listen(3000, '0.0.0.0', () => {
+    console.log('🔐 API running on http://134.199.150.238:3000');
     console.log('🎥 5-Channel Stream Manager');
 });
