@@ -50,12 +50,15 @@ class StreamManager extends EventEmitter {
         const channels = this.getAllChannels();
         let activeChannels = 0;
         let totalStreams = 0;
-        
+
         for (const ch of Object.values(channels)) {
             if (ch.isPreviewRunning) activeChannels++;
-            totalStreams += ch.activeStreams;
+            // Count active streaming destinations
+            if (ch.destinations) {
+                totalStreams += ch.destinations.filter(d => d.isStreaming).length;
+            }
         }
-        
+
         return {
             totalChannels: 5,
             activeChannels: activeChannels,

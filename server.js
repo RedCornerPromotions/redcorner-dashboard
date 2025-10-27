@@ -86,66 +86,66 @@ app.get('/api/channel/:num', (req, res) => {
 });
 
 // Preview control endpoints
-app.post('/api/channel/:num/preview/start', requireAuth, (req, res) => {
+app.post('/api/channel/:num/preview/start', (req, res) => {
     const channel = manager.getChannel(parseInt(req.params.num));
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
-    
+
     // Start preview from RTSP endpoint
     const rtspUrl = `rtsp://localhost:${8553 + parseInt(req.params.num)}/channel${req.params.num}`;
     const result = channel.startPreview(rtspUrl);
     res.json(result);
 });
 
-app.post('/api/channel/:num/preview/stop', requireAuth, (req, res) => {
+app.post('/api/channel/:num/preview/stop', (req, res) => {
     const channel = manager.getChannel(parseInt(req.params.num));
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
-    
+
     const result = channel.stopPreview();
     res.json(result);
 });
 
 // Destination control
-app.post('/api/channel/:num/destination/:id/start', requireAuth, (req, res) => {
+app.post('/api/channel/:num/destination/:id/start', (req, res) => {
     const channel = manager.getChannel(parseInt(req.params.num));
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
     res.json(channel.startDestination(req.params.id));
 });
 
-app.post('/api/channel/:num/destination/:id/stop', requireAuth, (req, res) => {
+app.post('/api/channel/:num/destination/:id/stop', (req, res) => {
     const channel = manager.getChannel(parseInt(req.params.num));
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
     res.json(channel.stopDestination(req.params.id));
 });
 
-app.post('/api/channel/:num/destinations/stop-all', requireAuth, (req, res) => {
+app.post('/api/channel/:num/destinations/stop-all', (req, res) => {
     const channel = manager.getChannel(parseInt(req.params.num));
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
     res.json(channel.stopAllDestinations());
 });
 
 // Overlay
-app.post('/api/channel/:num/overlay', requireAuth, (req, res) => {
+app.post('/api/channel/:num/overlay', (req, res) => {
     const channel = manager.getChannel(parseInt(req.params.num));
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
     res.json(channel.setOverlay(req.body.url));
 });
 
 // Destination management
-app.post('/api/channel/:num/destination', requireAuth, (req, res) => {
+app.post('/api/channel/:num/destination', (req, res) => {
     const channel = manager.getChannel(parseInt(req.params.num));
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
     const dest = channel.addDestination(req.body.url, req.body.name, req.body.protocol);
     res.json({ success: true, destination: dest });
 });
 
-app.delete('/api/channel/:num/destination/:id', requireAuth, (req, res) => {
+app.delete('/api/channel/:num/destination/:id', (req, res) => {
     const channel = manager.getChannel(parseInt(req.params.num));
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
     channel.removeDestination(req.params.id);
     res.json({ success: true });
 });
 
-app.post('/api/channel/:num/destination/:id/toggle', requireAuth, (req, res) => {
+app.post('/api/channel/:num/destination/:id/toggle', (req, res) => {
     const channel = manager.getChannel(parseInt(req.params.num));
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
     res.json({ success: true, destination: channel.toggleDestination(req.params.id) });
