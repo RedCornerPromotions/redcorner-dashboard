@@ -10,6 +10,9 @@
         .container { max-width: 2400px; margin: 0 auto; }
         
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 10px; }
+        .header-center { flex: 1; display: flex; justify-content: center; }
+        .multiview-btn { background: #3b82f6; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 13px; border: none; color: white; font-weight: 600; }
+        .multiview-btn:hover { background: #2563eb; }
         h1 { font-size: 20px; color: #00ff88; }
         .logout-btn { background: #dc2626; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; border: none; color: white; }
         .logout-btn:hover { background: #b91c1c; }
@@ -96,7 +99,10 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎥 5-Channel Stream Manager</h1>
+            <h1>5-Channel Stream Manager</h1>
+            <div class="header-center">
+                <button class="multiview-btn" onclick="window.open('/multiview.html', 'multiview', 'width=1920,height=1080')">OPEN MULTIVIEW</button>
+            </div>
             <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
         
@@ -114,7 +120,7 @@
                 </div>
                 
                 <div class="channel-control">
-                    <button id="channelBtn1" class="success" onclick="toggleChannel(1)">▶️ Start Channel</button>
+                    <button id="channelBtn1" class="success" onclick="toggleChannel(1)">Start Channel</button>
                 </div>
                 
                 <div class="tabs">
@@ -143,7 +149,7 @@
                 
                 <div class="tab-content" id="tab1-settings">
                     <div class="section">
-                        <h3>🎨 Overlay</h3>
+                        <h3>Overlay</h3>
                         <div class="overlay-section">
                             <input type="text" id="overlayUrl1" placeholder="Overlay image URL (PNG with transparency)" />
                             <button onclick="setOverlay(1)">Set</button>
@@ -152,7 +158,7 @@
                     </div>
                     
                     <div class="section" id="destSection1">
-                        <h3>📤 Destinations</h3>
+                        <h3>Destinations</h3>
                         <div id="destinations1"></div>
                         <div class="add-form">
                             <input type="text" id="destName1" placeholder="Name (e.g., YouTube)" />
@@ -177,7 +183,7 @@
                 </div>
                 
                 <div class="channel-control">
-                    <button id="channelBtn2" class="success" onclick="toggleChannel(2)">▶️ Start Channel</button>
+                    <button id="channelBtn2" class="success" onclick="toggleChannel(2)">Start Channel</button>
                 </div>
                 
                 <div class="tabs">
@@ -206,7 +212,7 @@
                 
                 <div class="tab-content" id="tab2-settings">
                     <div class="section">
-                        <h3>🎨 Overlay</h3>
+                        <h3>Overlay</h3>
                         <div class="overlay-section">
                             <input type="text" id="overlayUrl2" placeholder="Overlay image URL (PNG with transparency)" />
                             <button onclick="setOverlay(2)">Set</button>
@@ -215,7 +221,7 @@
                     </div>
                     
                     <div class="section" id="destSection2">
-                        <h3>📤 Destinations</h3>
+                        <h3>Destinations</h3>
                         <div id="destinations2"></div>
                         <div class="add-form">
                             <input type="text" id="destName2" placeholder="Name (e.g., YouTube)" />
@@ -239,7 +245,7 @@
                 </div>
                 
                 <div class="channel-control">
-                    <button id="channelBtn3" class="success" onclick="toggleChannel(3)">▶️ Start Channel</button>
+                    <button id="channelBtn3" class="success" onclick="toggleChannel(3)">Start Channel</button>
                 </div>
                 
                 <div class="tabs">
@@ -268,7 +274,7 @@
                 
                 <div class="tab-content" id="tab3-settings">
                     <div class="section">
-                        <h3>🎨 Overlay</h3>
+                        <h3>Overlay</h3>
                         <div class="overlay-section">
                             <input type="text" id="overlayUrl3" placeholder="Overlay image URL (PNG with transparency)" />
                             <button onclick="setOverlay(3)">Set</button>
@@ -277,7 +283,7 @@
                     </div>
                     
                     <div class="section" id="destSection3">
-                        <h3>📤 Destinations</h3>
+                        <h3>Destinations</h3>
                         <div id="destinations3"></div>
                         <div class="add-form">
                             <input type="text" id="destName3" placeholder="Name (e.g., YouTube)" />
@@ -301,7 +307,7 @@
                 </div>
                 
                 <div class="channel-control">
-                    <button id="channelBtn4" class="success" onclick="toggleChannel(4)">▶️ Start Channel</button>
+                    <button id="channelBtn4" class="success" onclick="toggleChannel(4)">Start Channel</button>
                 </div>
                 
                 <div class="tabs">
@@ -330,7 +336,7 @@
                 
                 <div class="tab-content" id="tab4-settings">
                     <div class="section">
-                        <h3>🎨 Overlay</h3>
+                        <h3>Overlay</h3>
                         <div class="overlay-section">
                             <input type="text" id="overlayUrl4" placeholder="Overlay image URL (PNG with transparency)" />
                             <button onclick="setOverlay(4)">Set</button>
@@ -339,7 +345,7 @@
                     </div>
                     
                     <div class="section" id="destSection4">
-                        <h3>📤 Destinations</h3>
+                        <h3>Destinations</h3>
                         <div id="destinations4"></div>
                         <div class="add-form">
                             <input type="text" id="destName4" placeholder="Name (e.g., YouTube)" />
@@ -363,7 +369,7 @@
                 </div>
                 
                 <div class="channel-control">
-                    <button id="channelBtn5" class="success" onclick="toggleChannel(5)">▶️ Start Channel</button>
+                    <button id="channelBtn5" class="success" onclick="toggleChannel(5)">Start Channel</button>
                 </div>
                 
                 <div class="tabs">
@@ -392,7 +398,7 @@
                 
                 <div class="tab-content" id="tab5-settings">
                     <div class="section">
-                        <h3>🎨 Overlay</h3>
+                        <h3>Overlay</h3>
                         <div class="overlay-section">
                             <input type="text" id="overlayUrl5" placeholder="Overlay image URL (PNG with transparency)" />
                             <button onclick="setOverlay(5)">Set</button>
@@ -401,7 +407,7 @@
                     </div>
                     
                     <div class="section" id="destSection5">
-                        <h3>📤 Destinations</h3>
+                        <h3>Destinations</h3>
                         <div id="destinations5"></div>
                         <div class="add-form">
                             <input type="text" id="destName5" placeholder="Name (e.g., YouTube)" />
@@ -485,7 +491,7 @@
                     badge.textContent = 'LIVE';
                     liveOverlay.style.display = 'flex';
                     channelBtn.className = 'danger';
-                    channelBtn.textContent = '⏹️ Stop Channel';
+                    channelBtn.textContent = 'Stop Channel';
                     destSection.classList.remove('disabled');
                 } else {
                     card.classList.remove('live');
@@ -493,14 +499,14 @@
                     badge.textContent = 'OFFLINE';
                     liveOverlay.style.display = 'none';
                     channelBtn.className = 'success';
-                    channelBtn.textContent = '▶️ Start Channel';
+                    channelBtn.textContent = 'Start Channel';
                     destSection.classList.add('disabled');
                 }
                 
                 // Update overlay display
                 if (channel.config && channel.config.overlayUrl) {
                     overlayInput.value = channel.config.overlayUrl;
-                    overlayCurrent.textContent = '✅ ' + channel.config.overlayUrl;
+                    overlayCurrent.textContent = 'Active: ' + channel.config.overlayUrl;
                 } else {
                     overlayCurrent.textContent = '';
                 }
@@ -511,12 +517,12 @@
                         <div class="destination">
                             <div class="dest-header">
                                 <div class="dest-info">
-                                    <div class="dest-name ${d.isStreaming ? 'streaming' : ''}">${d.isStreaming ? '🔴' : '⚪'} ${d.name}<span class="dest-protocol">${d.protocol.toUpperCase()}</span></div>
+                                    <div class="dest-name ${d.isStreaming ? 'streaming' : ''}">${d.isStreaming ? '[LIVE]' : '[OFF]'} ${d.name}<span class="dest-protocol">${d.protocol.toUpperCase()}</span></div>
                                     <div class="dest-url">${d.url}</div>
                                 </div>
                                 <div class="dest-actions">
                                     <button class="${d.isStreaming ? 'danger' : 'success'}" onclick="toggleDestination(${i}, '${d.id}', ${d.isStreaming})">${d.isStreaming ? 'Stop' : 'Start'}</button>
-                                    <button class="danger" onclick="removeDestination(${i}, '${d.id}')">×</button>
+                                    <button class="danger" onclick="removeDestination(${i}, '${d.id}')">Remove</button>
                                 </div>
                             </div>
                         </div>
@@ -538,13 +544,13 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast(action === 'start' ? '✅ Channel started' : '⏹️ Channel stopped');
+                    showToast(action === 'start' ? 'Channel started' : 'Channel stopped');
                 } else {
-                    showToast('❌ ' + (data.message || 'Error'));
+                    showToast('Error: ' + (data.message || 'Error'));
                 }
                 fetchStatus();
             } catch (err) {
-                showToast('❌ Error: ' + err.message);
+                showToast('Error: ' + err.message);
             }
         }
 
@@ -557,10 +563,10 @@
                     credentials: 'include',
                     body: JSON.stringify({ url: url || null })
                 });
-                showToast(url ? '✅ Overlay set - restarting channel' : '✅ Overlay removed');
+                showToast(url ? 'Overlay set - restarting channel' : 'Overlay removed');
                 fetchStatus();
             } catch (err) {
-                showToast('❌ Error setting overlay');
+                showToast('Error setting overlay');
             }
         }
 
@@ -568,7 +574,7 @@
             const name = document.getElementById('destName' + channelNum).value.trim();
             const url = document.getElementById('destUrl' + channelNum).value.trim();
 
-            if (!url) return showToast('❌ URL required');
+            if (!url) return showToast('URL required');
 
             try {
                 const res = await fetch(API + '/channel/' + channelNum + '/destination', {
@@ -581,22 +587,22 @@
                 const data = await res.json();
 
                 if (res.status === 401) {
-                    showToast('❌ Session expired - please login again');
+                    showToast('Session expired - please login again');
                     setTimeout(() => { window.location.href = '/'; }, 2000);
                     return;
                 }
 
                 if (!res.ok) {
-                    showToast('❌ ' + (data.error || data.message || 'Error adding destination'));
+                    showToast('Error: ' + (data.error || data.message || 'Error adding destination'));
                     return;
                 }
 
-                showToast('✅ Destination added');
+                showToast('Destination added');
                 document.getElementById('destName' + channelNum).value = '';
                 document.getElementById('destUrl' + channelNum).value = '';
                 fetchStatus();
             } catch (err) {
-                showToast('❌ Error: ' + err.message);
+                showToast('Error: ' + err.message);
             }
         }
 
@@ -606,10 +612,10 @@
                     method: 'POST',
                     credentials: 'include'
                 });
-                showToast(isStreaming ? '⏹️ Stopped' : '▶️ Started');
+                showToast(isStreaming ? 'Stopped' : 'Started');
                 fetchStatus();
             } catch (err) {
-                showToast('❌ Error toggling destination');
+                showToast('Error toggling destination');
             }
         }
 
@@ -620,10 +626,10 @@
                     method: 'DELETE',
                     credentials: 'include'
                 });
-                showToast('✅ Removed');
+                showToast('Removed');
                 fetchStatus();
             } catch (err) {
-                showToast('❌ Error removing destination');
+                showToast('Error removing destination');
             }
         }
 

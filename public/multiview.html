@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiview - Production Monitor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 100vw;
+            height: 100vh;
+            gap: 2px;
+            background: #000;
+        }
+
+        .tile {
+            position: relative;
+            background: #0a0a0a;
+            border: 1px solid #222;
+            overflow: hidden;
+        }
+
+        .video-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .video-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        .info-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+            padding: 12px 16px 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            pointer-events: none;
+        }
+
+        .channel-name {
+            font-size: 24px;
+            font-weight: 700;
+            color: #00ff88;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+        }
+
+        .destination {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 2px;
+        }
+
+        .status {
+            font-size: 16px;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 4px;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+        }
+
+        .status.idle { background: #444; color: #999; }
+        .status.live { background: #16a34a; color: #fff; animation: pulse 2s infinite; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .stat-tile {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #1a1a1a, #0a0a0a);
+            border: 1px solid #333;
+            padding: 20px;
+        }
+
+        .stat-label {
+            font-size: 16px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .stat-value {
+            font-size: 48px;
+            font-weight: 700;
+            color: #00ff88;
+            text-shadow: 0 2px 12px rgba(0, 255, 136, 0.4);
+        }
+
+        .stat-sublabel {
+            font-size: 14px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        #alerts-list {
+            list-style: none;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        #alerts-list li {
+            padding: 8px 12px;
+            background: rgba(239, 68, 68, 0.2);
+            border-left: 3px solid #ef4444;
+            margin-bottom: 8px;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+
+        .no-alerts {
+            color: #16a34a;
+            font-size: 18px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="grid">
+        <!-- Channel 1 -->
+        <div class="tile" id="tile1">
+            <div class="video-container">
+                <iframe src="/player.html?channel=program1" allow="autoplay"></iframe>
+            </div>
+            <div class="info-overlay">
+                <div>
+                    <div class="channel-name">CH1</div>
+                    <div class="destination" id="dest1">-</div>
+                </div>
+                <div class="status idle" id="status1">IDLE</div>
+            </div>
+        </div>
+
+        <!-- Channel 2 -->
+        <div class="tile" id="tile2">
+            <div class="video-container">
+                <iframe src="/player.html?channel=program2" allow="autoplay"></iframe>
+            </div>
+            <div class="info-overlay">
+                <div>
+                    <div class="channel-name">CH2</div>
+                    <div class="destination" id="dest2">-</div>
+                </div>
+                <div class="status idle" id="status2">IDLE</div>
+            </div>
+        </div>
+
+        <!-- Channel 3 -->
+        <div class="tile" id="tile3">
+            <div class="video-container">
+                <iframe src="/player.html?channel=program3" allow="autoplay"></iframe>
+            </div>
+            <div class="info-overlay">
+                <div>
+                    <div class="channel-name">CH3</div>
+                    <div class="destination" id="dest3">-</div>
+                </div>
+                <div class="status idle" id="status3">IDLE</div>
+            </div>
+        </div>
+
+        <!-- Stats Tile -->
+        <div class="tile stat-tile">
+            <div class="stat-label">Active Channels</div>
+            <div class="stat-value" id="stat-active">0</div>
+            <div class="stat-sublabel">of 5 channels</div>
+        </div>
+
+        <!-- Channel 4 -->
+        <div class="tile" id="tile4">
+            <div class="video-container">
+                <iframe src="/player.html?channel=program4" allow="autoplay"></iframe>
+            </div>
+            <div class="info-overlay">
+                <div>
+                    <div class="channel-name">CH4</div>
+                    <div class="destination" id="dest4">-</div>
+                </div>
+                <div class="status idle" id="status4">IDLE</div>
+            </div>
+        </div>
+
+        <!-- Channel 5 -->
+        <div class="tile" id="tile5">
+            <div class="video-container">
+                <iframe src="/player.html?channel=program5" allow="autoplay"></iframe>
+            </div>
+            <div class="info-overlay">
+                <div>
+                    <div class="channel-name">CH5</div>
+                    <div class="destination" id="dest5">-</div>
+                </div>
+                <div class="status idle" id="status5">IDLE</div>
+            </div>
+        </div>
+
+        <!-- Cost Tile -->
+        <div class="tile stat-tile">
+            <div class="stat-label">Streaming</div>
+            <div class="stat-value" id="stat-streams">0</div>
+            <div class="stat-sublabel">destinations</div>
+        </div>
+
+        <!-- Alerts Tile -->
+        <div class="tile stat-tile">
+            <div class="stat-label">Alerts</div>
+            <ul id="alerts-list">
+                <li class="no-alerts">All Systems OK</li>
+            </ul>
+        </div>
+
+        <!-- System Tile -->
+        <div class="tile stat-tile">
+            <div class="stat-label">System</div>
+            <div class="stat-value" id="stat-uptime" style="font-size: 32px;">--:--</div>
+            <div class="stat-sublabel" id="stat-time">--:--:--</div>
+        </div>
+    </div>
+
+    <script>
+        const API = window.location.origin + '/api';
+
+        async function updateStats() {
+            try {
+                const res = await fetch(API + '/status', { credentials: 'include' });
+                if (!res.ok) return;
+                const data = await res.json();
+
+                let activeChannels = 0;
+                let totalStreams = 0;
+
+                for (let i = 1; i <= 5; i++) {
+                    const channel = data.channels['channel' + i];
+                    const statusEl = document.getElementById('status' + i);
+                    const destEl = document.getElementById('dest' + i);
+                    const tileEl = document.getElementById('tile' + i);
+
+                    if (channel.isPreviewRunning) {
+                        activeChannels++;
+                        statusEl.className = 'status live';
+                        statusEl.textContent = 'LIVE';
+                        tileEl.style.borderColor = '#16a34a';
+                    } else {
+                        statusEl.className = 'status idle';
+                        statusEl.textContent = 'IDLE';
+                        tileEl.style.borderColor = '#222';
+                    }
+
+                    // Show active destination
+                    if (channel.destinations && channel.destinations.length > 0) {
+                        const streaming = channel.destinations.filter(d => d.isStreaming);
+                        if (streaming.length > 0) {
+                            destEl.textContent = streaming.map(d => d.name).join(', ');
+                            totalStreams += streaming.length;
+                        } else {
+                            destEl.textContent = '-';
+                        }
+                    } else {
+                        destEl.textContent = '-';
+                    }
+                }
+
+                document.getElementById('stat-active').textContent = activeChannels;
+                document.getElementById('stat-streams').textContent = totalStreams;
+
+                // Update time
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                document.getElementById('stat-time').textContent = `${hours}:${minutes}:${seconds}`;
+
+            } catch (err) {
+                console.error('Error updating stats:', err);
+            }
+        }
+
+        // Update stats every 3 seconds
+        updateStats();
+        setInterval(updateStats, 3000);
+
+        // Update time every second
+        setInterval(() => {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('stat-time').textContent = `${hours}:${minutes}:${seconds}`;
+        }, 1000);
+    </script>
+</body>
+</html>
