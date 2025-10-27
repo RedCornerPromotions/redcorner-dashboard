@@ -156,3 +156,27 @@ function fillFacebook(channelNum) {
 }
 
 console.log('[Dashboard] Destination management functions loaded');
+
+async function removeDestinationUI(channelNum) {
+    if (!confirm('Remove all destinations from Channel ' + channelNum + '?\n\nChannel must be IDLE.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/channel/' + channelNum + '/destination', {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('Destinations removed from Channel ' + channelNum);
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error removing destination:', error);
+        alert('Failed to remove destination');
+    }
+}

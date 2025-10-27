@@ -90,6 +90,9 @@ function createChannelCards() {
                         <textarea id="srt-stream-id-${i}" placeholder="Stream ID" class="dest-textarea" rows="3"></textarea>
                         <button class="btn btn-primary" onclick="configureSRT(${i})">Configure SRT</button>
                     </div>
+                    <div style="margin-top: 10px;">
+                        <button class="btn btn-danger" onclick="removeDestinationUI(${i})">Remove All Destinations</button>
+                    </div>
                 </div>
 
                 <div class="overlay-section">

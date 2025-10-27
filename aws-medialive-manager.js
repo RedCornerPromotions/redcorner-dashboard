@@ -211,7 +211,7 @@ class AWSMediaLiveManager {
                     }
                 },
                 Outputs: [{
-                    OutputName: '_1',
+                    OutputName: 'rtmp-output',
                     OutputSettings: {
                         RtmpOutputSettings: {
                             CertificateMode: 'SELF_SIGNED',
@@ -320,7 +320,7 @@ class AWSMediaLiveManager {
                     }
                 },
                 Outputs: [{
-                    OutputName: '_1',
+                    OutputName: 'srt-output',
                     OutputSettings: {
                         UdpOutputSettings: {
                             Destination: {
@@ -331,7 +331,7 @@ class AWSMediaLiveManager {
                                     AudioBufferModel: 'ATSC',
                                     AudioFramesPerPes: 2,
                                     AudioStreamType: 'DVB',
-                                    Bitrate: 2000000,
+                                    Bitrate: 8000000,
                                     BufferModel: 'MULTIPLEX',
                                     CcDescriptor: 'DISABLED',
                                     EbpPlacement: 'VIDEO_AND_AUDIO_PIDS',
@@ -501,7 +501,7 @@ class AWSMediaLiveManager {
                     }
                 },
                 Outputs: [{
-                    OutputName: '_1',
+                    OutputName: 'rtmp-output',
                     OutputSettings: {
                         RtmpOutputSettings: {
                             CertificateMode: 'SELF_SIGNED',
@@ -610,7 +610,7 @@ class AWSMediaLiveManager {
                     }
                 },
                 Outputs: [{
-                    OutputName: '_1',
+                    OutputName: 'srt-output',
                     OutputSettings: {
                         UdpOutputSettings: {
                             Destination: {
@@ -621,7 +621,7 @@ class AWSMediaLiveManager {
                                     AudioBufferModel: 'ATSC',
                                     AudioFramesPerPes: 2,
                                     AudioStreamType: 'DVB',
-                                    Bitrate: 2000000,
+                                    Bitrate: 8000000,
                                     BufferModel: 'MULTIPLEX',
                                     CcDescriptor: 'DISABLED',
                                     EbpPlacement: 'VIDEO_AND_AUDIO_PIDS',

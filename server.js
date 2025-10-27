@@ -162,6 +162,17 @@ app.get('/api/costs', requireAuth, async (req, res) => {
     res.json(costs);
 });
 
+
+// Remove destination (DELETE - channel must be IDLE)
+app.delete('/api/channel/:num/destination', requireAuth, async (req, res) => {
+    const channelNum = parseInt(req.params.num);
+    if (channelNum < 1 || channelNum > 5) {
+        return res.status(400).json({ error: 'Invalid channel number' });
+    }
+    const result = await awsManager.removeDestination(channelNum);
+    res.json(result);
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log('==========================================');
     console.log('Red Corner Stream Dashboard - AWS Edition');
