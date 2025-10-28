@@ -5,12 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Red Corner - AWS Stream Dashboard</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: #1a1a1a;
+            border-bottom: 2px solid #3b82f6;
+        }
+        .header-left h1 {
+            margin: 0;
+            font-size: 20px;
+            color: #60a5fa;
+        }
+        .header-center {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+        }
+        .multiview-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .multiview-btn:hover {
+            background: #2563eb;
+        }
+        #logoutBtn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        #logoutBtn:hover {
+            background: #b91c1c;
+        }
+    </style>
 </head>
 <body>
     <div class="dashboard-container">
         <header class="dashboard-header">
-            <h1>Red Corner - AWS MediaLive Dashboard</h1>
-            <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+            <div class="header-left">
+                <h1>Red Corner Stream Manager</h1>
+            </div>
+            <div class="header-center">
+                <button class="multiview-btn" onclick="window.open('/multiview.html', 'multiview', 'width=1920,height=1080')">OPEN MULTIVIEW</button>
+            </div>
+            <button id="logoutBtn">Logout</button>
         </header>
 
         <div class="cost-monitor">

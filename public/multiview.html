@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Red Corner - Production Multiview</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #000; 
+            color: #fff; 
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            font-size: 13px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            height: 100vh;
+            gap: 2px;
+            padding: 2px;
+        }
+        
+        .tile {
+            background: #111;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid #333;
+            transition: border-color 0.3s;
+        }
+        
+        .tile.live {
+            border-color: #16a34a;
+            box-shadow: 0 0 10px rgba(22, 163, 74, 0.5);
+        }
+        
+        .tile.starting {
+            border-color: #d97706;
+        }
+        
+        .video-container {
+            width: 100%;
+            height: 100%;
+            background: #000;
+        }
+        
+        .video-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .info-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px 12px;
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .channel-name {
+            font-weight: bold;
+            font-size: 14px;
+            color: #00ff88;
+            margin-bottom: 4px;
+        }
+        
+        .destination {
+            font-size: 11px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+        
+        .status {
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status.live {
+            color: #16a34a;
+        }
+        
+        .status.idle {
+            color: #666;
+        }
+        
+        .status.starting {
+            color: #d97706;
+        }
+        
+        .stat-tile {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .stat-title {
+            font-size: 16px;
+            color: #00ff88;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        
+        .stat-line {
+            font-size: 12px;
+            margin: 3px 0;
+            color: #ccc;
+        }
+        
+        .stat-value {
+            color: #fff;
+            font-weight: bold;
+        }
+        
+        .alert {
+            color: #ef4444;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="grid">
+        <!-- Channel 1 -->
+        <div class="tile" id="tile1">
+            <div class="video-container">
+                <iframe src="/player.html?channel=program1" allow="autoplay"></iframe>
+            </div>
+            <div class="info-overlay">
+                <div class="channel-name">CH1</div>
+                <div class="destination" id="dest1">-</div>
+                <div class="status idle" id="status1">IDLE</div>
+            </div>
+        </div>
+        
+        <!-- Channel 2 -->
+        <div class="tile" id="tile2">
+            <div class="video-container">
+                <iframe src="/player.html?channel=program2" allow="autoplay"></iframe>
+            </div>
+            <div class="info-overlay">
+                <div class="channel-name">CH2</div>
+                <div class="destination" id="dest2">-</div>
+                <div class="status idle" id="status2">IDLE</div>
+            </div>
+        </div>
+        
+        <!-- Channel 3 -->
+        <div class="tile" id="tile3">
+            <div class="video-container">
+                <iframe src="/player.html?channel=program3" allow="autoplay"></iframe>
+            </div>
+            <div class="info-overlay">
+                <div class="channel-name">CH3</div>
+                <div class="destination" id="dest3">-</div>
+                <div class="status idle" id="status3">IDLE</div>
+            </div>
+        </div>
+        
+        <!-- Channel 4 -->
+        <div class="tile" id="tile4">
+            <div class="video-container">
+                <iframe src="/player.html?channel=program4" allow="autoplay"></iframe>
+            </div>
+            <div class="info-overlay">
+                <div class="channel-name">CH4</div>
+                <div class="destination" id="dest4">-</div>
+                <div class="status idle" id="status4">IDLE</div>
+            </div>
+        </div>
+        
+        <!-- Channel 5 -->
+        <div class="tile" id="tile5">
+            <div class="video-container">
+                <iframe src="/player.html?channel=program5" allow="autoplay"></iframe>
+            </div>
+            <div class="info-overlay">
+                <div class="channel-name">CH5</div>
+                <div class="destination" id="dest5">-</div>
+                <div class="status idle" id="status5">IDLE</div>
+            </div>
+        </div>
+        
+        <!-- Stats Tile -->
+        <div class="tile stat-tile">
+            <div class="stat-title">STATS</div>
+            <div class="stat-line">CH1: <span class="stat-value" id="bitrate1">-</span></div>
+            <div class="stat-line">CH2: <span class="stat-value" id="bitrate2">-</span></div>
+            <div class="stat-line">CH3: <span class="stat-value" id="bitrate3">-</span></div>
+            <div class="stat-line">CH4: <span class="stat-value" id="bitrate4">-</span></div>
+            <div class="stat-line">CH5: <span class="stat-value" id="bitrate5">-</span></div>
+        </div>
+        
+        <!-- Cost Tile -->
+        <div class="tile stat-tile">
+            <div class="stat-title">COST</div>
+            <div class="stat-line">Active: <span class="stat-value" id="activeCount">0</span></div>
+            <div class="stat-line">Per Hour: <span class="stat-value" id="costHour">$0.00</span></div>
+            <div class="stat-line">Today: <span class="stat-value" id="costDay">$0.00</span></div>
+            <div class="stat-line">Flows: <span class="stat-value" id="flowCount">0</span></div>
+        </div>
+        
+        <!-- Alerts Tile -->
+        <div class="tile stat-tile">
+            <div class="stat-title">ALERTS</div>
+            <div id="alertsList">
+                <div class="stat-line">All systems operational</div>
+            </div>
+        </div>
+        
+        <!-- System Tile -->
+        <div class="tile stat-tile">
+            <div class="stat-title">SYSTEM</div>
+            <div class="stat-line">Pipelines: <span class="stat-value" id="pipelines">-</span></div>
+            <div class="stat-line">Region: <span class="stat-value">ap-southeast-2</span></div>
+            <div class="stat-line">Updated: <span class="stat-value" id="lastUpdate">-</span></div>
+        </div>
+    </div>
+
+    <script>
+        const API = window.location.origin + '/api';
+
+        async function updateStats() {
+            try {
+                const res = await fetch(API + '/status', { credentials: 'include' });
+                if (!res.ok) return;
+                
+                const data = await res.json();
+                const channels = data.channels;
+                
+                let activeCount = 0;
+                let pipelineCount = 0;
+                
+                for (let i = 1; i <= 5; i++) {
+                    const ch = channels['channel' + i];
+                    const tile = document.getElementById('tile' + i);
+                    const status = document.getElementById('status' + i);
+                    const dest = document.getElementById('dest' + i);
+                    const bitrate = document.getElementById('bitrate' + i);
+                    
+                    if (ch.isPreviewRunning) {
+                        activeCount++;
+                        pipelineCount += ch.pipelinesRunning || 0;
+                        
+                        tile.className = 'tile live';
+                        status.className = 'status live';
+                        
+                        const hours = Math.floor(ch.uptime / 3600);
+                        const mins = Math.floor((ch.uptime % 3600) / 60);
+                        status.textContent = `LIVE ${hours}h${mins}m`;
+                        
+                        if (ch.destinations && ch.destinations.length > 0) {
+                            const activeDests = ch.destinations.filter(d => d.isStreaming);
+                            if (activeDests.length > 0) {
+                                dest.textContent = 'Output to: ' + activeDests[0].name;
+                            } else {
+                                dest.textContent = 'No output';
+                            }
+                        } else {
+                            dest.textContent = 'No destination';
+                        }
+                        
+                        bitrate.textContent = '8 Mbps';
+                    } else if (ch.state === 'STARTING') {
+                        tile.className = 'tile starting';
+                        status.className = 'status starting';
+                        status.textContent = 'STARTING';
+                        dest.textContent = '-';
+                        bitrate.textContent = 'OFF';
+                    } else {
+                        tile.className = 'tile';
+                        status.className = 'status idle';
+                        status.textContent = 'IDLE';
+                        dest.textContent = '-';
+                        bitrate.textContent = 'OFF';
+                    }
+                }
+                
+                document.getElementById('activeCount').textContent = activeCount;
+                document.getElementById('costHour').textContent = '$' + (activeCount * 2).toFixed(2);
+                document.getElementById('costDay').textContent = '$' + (activeCount * 2 * 24).toFixed(2);
+                document.getElementById('flowCount').textContent = '0';
+                document.getElementById('pipelines').textContent = pipelineCount + '/' + (activeCount * 2);
+                
+                const now = new Date();
+                document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
+                
+            } catch (err) {
+                console.error('Update failed:', err);
+            }
+        }
+
+        updateStats();
+        setInterval(updateStats, 3000);
+    </script>
+</body>
+</html>

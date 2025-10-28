@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLS Player</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { 
+            width: 100%; 
+            height: 100%; 
+            background: #000; 
+            overflow: hidden; 
+        }
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+        video { 
+            width: 100%; 
+            height: 100%; 
+            display: block;
+            object-fit: contain;
+        }
+        .pattern {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #1a1a1a;
+            color: #fff;
+            font-family: sans-serif;
+        }
+        .pattern h1 { font-size: 32px; margin-bottom: 15px; color: #00ff88; }
+        .pattern p { font-size: 16px; color: #999; }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const ch = params.get('channel') || '1';
+        const cloudfront = 'd2njmhq33zb6p4.cloudfront.net';
+
+        const isProgram = ch.startsWith('program');
+        const channelNum = isProgram ? ch.replace('program', '') : ch;
+        const filename = isProgram ? 'program_1.m3u8' : 'stream_1.m3u8';
+
+        const url = `https://${cloudfront}/medialive/channel${channelNum}/${filename}`;
+
+        function pattern() {
+            const label = isProgram ? 'PROGRAM' : 'PREVIEW';
+            document.getElementById('container').innerHTML = `
+                <div class="pattern">
+                    <h1>Channel ${channelNum} - ${label}</h1>
+                    <p>No stream available</p>
+                </div>
+            `;
+            setTimeout(init, 3000);
+        }
+
+        function init() {
+            fetch(url).then(r => {
+                if (!r.ok) { pattern(); return; }
+                document.getElementById('container').innerHTML = '<video id="v" controls autoplay muted playsinline></video>';
+                const v = document.getElementById('v');
+                if (Hls.isSupported()) {
+                    const h = new Hls({
+                        debug: false,
+                        enableWorker: true,
+                        lowLatencyMode: true,
+                        backBufferLength: 90
+                    });
+                    h.loadSource(url);
+                    h.attachMedia(v);
+                    h.on(Hls.Events.MANIFEST_PARSED, () => v.play().catch(e => {}));
+                    h.on(Hls.Events.ERROR, (e, d) => {
+                        if (d.fatal) {
+                            console.error('HLS Error:', d);
+                            h.destroy();
+                            setTimeout(init, 3000);
+                        }
+                    });
+                } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
+                    v.src = url;
+                    v.addEventListener('error', () => setTimeout(init, 3000));
+                }
+            }).catch(() => pattern());
+        }
+
+        init();
+    </script>
+</body>
+</html>

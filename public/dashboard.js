@@ -50,9 +50,16 @@ function createChannelCards() {
                     <button class="btn btn-danger" onclick="stopChannel(${i})" id="stop-${i}">Stop Channel</button>
                 </div>
 
+                <div class="video-player-section">
+                    <h4 style="margin: 10px 0; color: #60a5fa; font-size: 14px;">Program Output</h4>
+                    <div class="video-player-container">
+                        <iframe src="/player.html?channel=program${i}" allow="autoplay" style="width:100%; height:100%; border:none;"></iframe>
+                    </div>
+                </div>
+
                 <div class="destination-section">
                     <h4>Stream Destination</h4>
-                    <p class="destination-help">⚠️ Configure destination BEFORE starting channel. Channel must be IDLE to change.</p>
+                    <p class="destination-help">⚠ Configure destination BEFORE starting channel. Channel must be IDLE to change.</p>
 
                     <div id="dest-status-${i}" class="destination-status">
                         <div class="destination-idle">
@@ -272,6 +279,7 @@ function updateChannelUI(channelNum, status) {
         statusBadge.className = 'channel-status status-error';
     }
 }
+
 
 // Refresh costs
 async function refreshCosts() {

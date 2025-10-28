@@ -1,0 +1,21 @@
+# Backup files
+*.backup
+*.backup-*
+*.BROKEN
+*.BROKEN2
+*.old
+*.save
+
+# Environment variables
+.env
+
+# Node modules
+node_modules/
+
+# AWS SDK packages (can be reinstalled)
+node_modules/@aws-sdk/
+
+# Temporary files
+*.tmp
+*.log
+update-*.sh
