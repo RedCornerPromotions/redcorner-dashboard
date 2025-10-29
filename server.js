@@ -181,6 +181,7 @@ app.listen(PORT, '0.0.0.0', () => {
 
 const { S3Client, ListObjectsV2Command, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { MediaConvertClient, CreateJobCommand, GetJobCommand } = require('@aws-sdk/client-mediaconvert');
 const fs = require('fs');
 const path = require('path');
 
@@ -192,8 +193,18 @@ const s3Client = new S3Client({
     }
 });
 
+// MediaConvert client - needs endpoint from account
+const mediaConvertClient = new MediaConvertClient({
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    }
+});
+
 const S3_BUCKET = 'redcornerliveaws-cloudfronttos3s3bucket9ce6ab04-o5i0suwrjg8o';
 const SETTINGS_FILE = path.join(__dirname, 'recordings-settings.json');
+const MEDIACONVERT_ROLE = process.env.MEDIACONVERT_ROLE || 'arn:aws:iam::385143423667:role/MediaConvertRole';
 
 // Load recording name settings
 function loadRecordingSettings() {
@@ -351,17 +362,114 @@ app.get('/api/recordings/download/:channel/:fileKey(*)', requireAuth, async (req
 app.delete('/api/recordings/:channel/:fileKey(*)', requireAuth, async (req, res) => {
     try {
         const { fileKey } = req.params;
-        
+
         const command = new DeleteObjectCommand({
             Bucket: S3_BUCKET,
             Key: decodeURIComponent(fileKey)
         });
-        
+
         await s3Client.send(command);
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error deleting recording:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Convert recording to MP4 HEVC
+app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req, res) => {
+    try {
+        const { channel, fileKey } = req.params;
+        const decodedKey = decodeURIComponent(fileKey);
+
+        // Get the settings for custom filename
+        const settings = loadRecordingSettings();
+        const outputFilename = generateDownloadFilename(channel, decodedKey, settings).replace('.ts', '.mp4');
+
+        // Extract just the filename without path
+        const inputFilename = decodedKey.split('/').pop();
+        const outputKey = decodedKey.replace(inputFilename, outputFilename);
+
+        const jobParams = {
+            Role: MEDIACONVERT_ROLE,
+            Settings: {
+                Inputs: [{
+                    FileInput: `s3://${S3_BUCKET}/${decodedKey}`,
+                    TimecodeSource: 'ZEROBASED'
+                }],
+                OutputGroups: [{
+                    Name: 'File Group',
+                    OutputGroupSettings: {
+                        Type: 'FILE_GROUP_SETTINGS',
+                        FileGroupSettings: {
+                            Destination: `s3://${S3_BUCKET}/${outputKey.substring(0, outputKey.lastIndexOf('/') + 1)}`
+                        }
+                    },
+                    Outputs: [{
+                        ContainerSettings: {
+                            Container: 'MP4',
+                            Mp4Settings: {}
+                        },
+                        VideoDescription: {
+                            CodecSettings: {
+                                Codec: 'H_265',
+                                H265Settings: {
+                                    RateControlMode: 'QVBR',
+                                    QualityTuningLevel: 'SINGLE_PASS_HQ',
+                                    Bitrate: 5000000,
+                                    MaxBitrate: 8000000
+                                }
+                            }
+                        },
+                        AudioDescriptions: [{
+                            CodecSettings: {
+                                Codec: 'AAC',
+                                AacSettings: {
+                                    Bitrate: 128000,
+                                    CodecProfile: 'LC',
+                                    SampleRate: 48000
+                                }
+                            }
+                        }],
+                        NameModifier: `_${outputFilename.replace('.mp4', '')}`
+                    }]
+                }]
+            }
+        };
+
+        const command = new CreateJobCommand(jobParams);
+        const response = await mediaConvertClient.send(command);
+
+        res.json({
+            success: true,
+            jobId: response.Job.Id,
+            status: response.Job.Status,
+            outputFilename
+        });
+    } catch (error) {
+        console.error('Error creating MediaConvert job:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get conversion job status
+app.get('/api/recordings/convert/status/:jobId', requireAuth, async (req, res) => {
+    try {
+        const { jobId } = req.params;
+
+        const command = new GetJobCommand({ Id: jobId });
+        const response = await mediaConvertClient.send(command);
+
+        res.json({
+            success: true,
+            status: response.Job.Status,
+            progress: response.Job.JobPercentComplete || 0,
+            createdAt: response.Job.CreatedAt,
+            completedAt: response.Job.Timing?.FinishTime
+        });
+    } catch (error) {
+        console.error('Error getting MediaConvert job status:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
