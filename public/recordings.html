@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recordings & Downloads</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            background: #0a0a0a;
+            color: #fff;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #00ff88;
+            font-size: 28px;
+        }
+        .close-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .close-btn:hover {
+            background: #b91c1c;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+        }
+        .tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab:hover {
+            color: #fff;
+            background: #252525;
+        }
+        .tab.active {
+            color: #60a5fa;
+            border-bottom-color: #60a5fa;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Recordings List */
+        .channel-section {
+            background: #1a1a1a;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .channel-section h3 {
+            color: #60a5fa;
+            margin-bottom: 15px;
+        }
+        .recordings-list {
+            display: grid;
+            gap: 10px;
+        }
+        .recording-item {
+            background: #252525;
+            padding: 15px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .recording-info {
+            flex: 1;
+        }
+        .recording-info h4 {
+            color: #fff;
+            margin-bottom: 5px;
+        }
+        .recording-info p {
+            color: #999;
+            font-size: 13px;
+        }
+        .recording-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .btn-download {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-download:hover {
+            background: #2563eb;
+        }
+        .btn-delete {
+            background: #dc2626;
+            color: white;
+        }
+        .btn-delete:hover {
+            background: #b91c1c;
+        }
+        
+        /* Settings */
+        .settings-grid {
+            display: grid;
+            gap: 15px;
+        }
+        .setting-item {
+            background: #252525;
+            padding: 20px;
+            border-radius: 6px;
+        }
+        .setting-item label {
+            display: block;
+            color: #60a5fa;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .setting-item input {
+            width: 100%;
+            padding: 10px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+        .setting-item input:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+        .setting-item small {
+            display: block;
+            color: #999;
+            margin-top: 5px;
+            font-size: 12px;
+        }
+        .save-settings-btn {
+            background: #16a34a;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+        .save-settings-btn:hover {
+            background: #15803d;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Recordings & Downloads</h1>
+        <button class="close-btn" onclick="window.close()">Close Window</button>
+    </div>
+    
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('recordings')">Recordings</button>
+        <button class="tab" onclick="switchTab('settings')">Settings</button>
+    </div>
+    
+    <div id="tab-recordings" class="tab-content active">
+        <div id="recordings-container">
+            <div class="loading">Loading recordings...</div>
+        </div>
+    </div>
+    
+    <div id="tab-settings" class="tab-content">
+        <div class="settings-grid" id="settings-container">
+            <!-- Settings will be loaded here -->
+        </div>
+        <button class="save-settings-btn" onclick="saveSettings()">Save Settings</button>
+    </div>
+    
+    <script>
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            if (tab === 'recordings') {
+                document.querySelector('.tab:nth-child(1)').classList.add('active');
+                document.getElementById('tab-recordings').classList.add('active');
+            } else {
+                document.querySelector('.tab:nth-child(2)').classList.add('active');
+                document.getElementById('tab-settings').classList.add('active');
+            }
+        }
+        
+        async function loadRecordings() {
+            try {
+                const response = await fetch('/api/recordings', { credentials: 'include' });
+                const data = await response.json();
+                
+                const container = document.getElementById('recordings-container');
+                
+                if (!data.success || data.recordings.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No recordings found</div>';
+                    return;
+                }
+                
+                let html = '';
+                data.recordings.forEach(channel => {
+                    if (channel.files.length > 0) {
+                        html += `
+                            <div class="channel-section">
+                                <h3>Channel ${channel.channel}</h3>
+                                <div class="recordings-list">
+                        `;
+                        
+                        channel.files.forEach(file => {
+                            html += `
+                                <div class="recording-item">
+                                    <div class="recording-info">
+                                        <h4>${file.displayName}</h4>
+                                        <p>Size: ${file.sizeFormatted} ³¼â€¢ Modified: ${file.dateFormatted}</p>
+                                    </div>
+                                    <div class="recording-actions">
+                                        <button class="btn btn-download" onclick="downloadRecording(${channel.channel}, '${file.key}', '${file.displayName}')">
+                                            Download
+                                        </button>
+                                        <button class="btn btn-delete" onclick="deleteRecording(${channel.channel}, '${file.key}')">
+                                            Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        html += `
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                document.getElementById('recordings-container').innerHTML = 
+                    '<div class="empty-state">Error loading recordings</div>';
+            }
+        }
+        
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/recordings/settings', { credentials: 'include' });
+                const data = await response.json();
+                
+                const container = document.getElementById('settings-container');
+                let html = '';
+                
+                for (let i = 1; i <= 5; i++) {
+                    const prefix = data.settings[`channel${i}`] || `Channel_${i}_PGM`;
+                    html += `
+                        <div class="setting-item">
+                            <label>Channel ${i} Recording Name Prefix</label>
+                            <input type="text" id="prefix-${i}" value="${prefix}" placeholder="Channel_${i}_PGM">
+                            <small>Downloads will be named: ${prefix}_Fri_Oct_28.mp4</small>
+                        </div>
+                    `;
+                }
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+        
+        async function saveSettings() {
+            const settings = {};
+            for (let i = 1; i <= 5; i++) {
+                settings[`channel${i}`] = document.getElementById(`prefix-${i}`).value;
+            }
+            
+            try {
+                const response = await fetch('/api/recordings/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Settings saved!');
+                } else {
+                    alert('Error saving settings');
+                }
+            } catch (error) {
+                alert('Error saving settings');
+            }
+        }
+        
+        async function downloadRecording(channel, fileKey, displayName) {
+            window.location.href = `/api/recordings/download/${channel}/${encodeURIComponent(fileKey)}?name=${encodeURIComponent(displayName)}`;
+        }
+        
+        async function deleteRecording(channel, fileKey) {
+            if (!confirm('Are you sure you want to delete this recording?')) return;
+            
+            try {
+                const response = await fetch(`/api/recordings/${channel}/${encodeURIComponent(fileKey)}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Recording deleted');
+                    loadRecordings();
+                } else {
+                    alert('Error deleting recording');
+                }
+            } catch (error) {
+                alert('Error deleting recording');
+            }
+        }
+        
+        // Initialize
+        window.addEventListener('load', () => {
+            loadRecordings();
+            loadSettings();
+        });
+    </script>
+</body>
+</html>

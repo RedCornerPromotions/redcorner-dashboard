@@ -174,6 +174,198 @@ app.delete('/api/channel/:num/destination', requireAuth, async (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
+
+// ==========================================
+// RECORDINGS API ENDPOINTS
+// ==========================================
+
+const { S3Client, ListObjectsV2Command, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const fs = require('fs');
+const path = require('path');
+
+const s3Client = new S3Client({
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    }
+});
+
+const S3_BUCKET = 'redcornerliveaws-cloudfronttos3s3bucket9ce6ab04-o5i0suwrjg8o';
+const SETTINGS_FILE = path.join(__dirname, 'recordings-settings.json');
+
+// Load recording name settings
+function loadRecordingSettings() {
+    try {
+        if (fs.existsSync(SETTINGS_FILE)) {
+            return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+        }
+    } catch (error) {
+        console.error('Error loading recording settings:', error);
+    }
+    return {
+        channel1: 'Channel_1_PGM',
+        channel2: 'Ch2',
+        channel3: 'Channel_3',
+        channel4: 'Channel_4',
+        channel5: 'Channel_5'
+    };
+}
+
+// Save recording name settings
+function saveRecordingSettings(settings) {
+    try {
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+        return true;
+    } catch (error) {
+        console.error('Error saving recording settings:', error);
+        return false;
+    }
+}
+
+// Format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+// Format date
+function formatDate(date) {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${days[date.getDay()]} ${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+}
+
+// Generate download filename
+function generateDownloadFilename(channel, originalKey, settings) {
+    const prefix = settings[`channel${channel}`] || `Channel_${channel}_PGM`;
+    const date = new Date();
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    const day = days[date.getDay()];
+    const month = months[date.getMonth()];
+    const dateNum = date.getDate();
+    
+    // Get file extension from original
+    const ext = originalKey.split('.').pop();
+    
+    return `${prefix}_${day}_${month}_${dateNum}.${ext}`;
+}
+
+// List recordings
+app.get('/api/recordings', requireAuth, async (req, res) => {
+    try {
+        const recordings = [];
+        
+        for (let channel = 1; channel <= 5; channel++) {
+            const prefix = `recordings/channel${channel}/program/`;
+            
+            const command = new ListObjectsV2Command({
+                Bucket: S3_BUCKET,
+                Prefix: prefix
+            });
+            
+            try {
+                const response = await s3Client.send(command);
+                
+                if (response.Contents && response.Contents.length > 0) {
+                    const settings = loadRecordingSettings();
+                    
+                    const files = response.Contents
+                        .filter(item => item.Size > 1000) // Filter out tiny files
+                        .map(item => ({
+                            key: item.Key,
+                            size: item.Size,
+                            sizeFormatted: formatFileSize(item.Size),
+                            date: item.LastModified,
+                            dateFormatted: formatDate(new Date(item.LastModified)),
+                            displayName: generateDownloadFilename(channel, item.Key, settings)
+                        }))
+                        .sort((a, b) => b.date - a.date); // Newest first
+                    
+                    recordings.push({
+                        channel,
+                        files
+                    });
+                }
+            } catch (err) {
+                console.error(`Error listing recordings for channel ${channel}:`, err);
+            }
+        }
+        
+        res.json({ success: true, recordings });
+    } catch (error) {
+        console.error('Error listing recordings:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get recording settings
+app.get('/api/recordings/settings', requireAuth, async (req, res) => {
+    try {
+        const settings = loadRecordingSettings();
+        res.json({ success: true, settings });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Save recording settings
+app.post('/api/recordings/settings', requireAuth, async (req, res) => {
+    try {
+        const { settings } = req.body;
+        const success = saveRecordingSettings(settings);
+        res.json({ success });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Download recording
+app.get('/api/recordings/download/:channel/:fileKey(*)', requireAuth, async (req, res) => {
+    try {
+        const { channel, fileKey } = req.params;
+        const displayName = req.query.name || fileKey;
+        
+        const command = new GetObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: decodeURIComponent(fileKey)
+        });
+        
+        const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        
+        // Redirect to signed URL with custom filename
+        res.redirect(url);
+    } catch (error) {
+        console.error('Error downloading recording:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Delete recording
+app.delete('/api/recordings/:channel/:fileKey(*)', requireAuth, async (req, res) => {
+    try {
+        const { fileKey } = req.params;
+        
+        const command = new DeleteObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: decodeURIComponent(fileKey)
+        });
+        
+        await s3Client.send(command);
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting recording:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
     console.log('==========================================');
     console.log('Red Corner Stream Dashboard - AWS Edition');
     console.log('==========================================');
