@@ -298,12 +298,12 @@
                                         <button class="btn btn-download" onclick="downloadRecording(${channel.channel}, '${file.key}', '${file.displayName}')">
                                             Download
                                         </button>
-                                        ${isTS ? `
+                                        ${(isTS || file.key.endsWith('.m3u8')) ? `
                                         <button class="btn btn-convert" onclick="convertRecording(${channel.channel}, '${file.key}', '${conversionId}')">
                                             Convert to MP4
                                         </button>
                                         ` : ''}
-                                        <button class="btn btn-delete" onclick="deleteRecording(${channel.channel}, '${file.key}')">
+                                        <button class="btn btn-delete" onclick="deleteRecording(${channel.channel}, '${file.key}', '${conversionId}')">
                                             Delete
                                         </button>
                                     </div>
