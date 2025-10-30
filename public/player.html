@@ -71,6 +71,16 @@
                 let lastTimeUpdate = Date.now();
                 let lastPosition = 0;
                 let stallCheckInterval;
+                let hlsInstance = null; // Hold reference to HLS instance for cleanup
+
+                // Track playlist staleness - detect when channel stops but cache keeps serving
+                // This prevents the "heist movie" problem where CloudFront caches keep serving
+                // old segments after the channel stops, making it look like the stream is still live
+                let lastSegmentSeen = null;
+                let lastNewSegmentTime = Date.now();
+                const STALE_THRESHOLD = 20000; // 20 seconds without new segments = stream is dead
+                                                 // MediaLive writes new segments every ~6-10 seconds
+                                                 // So 20 seconds without updates = definitely stopped
 
                 // Monitor for stalled playback (stream ended)
                 function checkStall() {
@@ -80,7 +90,7 @@
                     // If no position change for 10 seconds, assume stream ended
                     if (currentPos === lastPosition && (now - lastTimeUpdate) > 10000) {
                         console.log('Stream stalled - switching to pattern');
-                        if (stallCheckInterval) clearInterval(stallCheckInterval);
+                        cleanup();
                         pattern();
                         return;
                     }
@@ -96,31 +106,80 @@
                     lastTimeUpdate = Date.now();
                 });
 
+                // Clean up all intervals and HLS instances
+                function cleanup() {
+                    if (stallCheckInterval) {
+                        clearInterval(stallCheckInterval);
+                        stallCheckInterval = null;
+                    }
+                    if (hlsInstance) {
+                        hlsInstance.destroy();
+                        hlsInstance = null;
+                    }
+                }
+
+                // Monitor for playlist staleness (CloudFront cache serving old segments)
+                function checkPlaylistStaleness() {
+                    const now = Date.now();
+                    const timeSinceNewSegment = now - lastNewSegmentTime;
+
+                    if (lastSegmentSeen && timeSinceNewSegment > STALE_THRESHOLD) {
+                        console.log(`⚠️ STALE PLAYLIST DETECTED: No new segments for ${Math.round(timeSinceNewSegment/1000)}s`);
+                        console.log('Channel stopped but CloudFront cache still serving old content');
+                        cleanup();
+                        pattern();
+                    }
+                }
+
                 // Start monitoring for stalls every 2 seconds
-                stallCheckInterval = setInterval(checkStall, 2000);
+                stallCheckInterval = setInterval(() => {
+                    checkStall();
+                    checkPlaylistStaleness();
+                }, 2000);
 
                 if (Hls.isSupported()) {
-                    const h = new Hls({
+                    hlsInstance = new Hls({
                         debug: false,
                         enableWorker: true,
                         lowLatencyMode: true,
                         backBufferLength: 90
                     });
-                    h.loadSource(url);
-                    h.attachMedia(v);
-                    h.on(Hls.Events.MANIFEST_PARSED, () => v.play().catch(e => {}));
-                    h.on(Hls.Events.ERROR, (e, d) => {
+
+                    // Monitor manifest updates to detect stale playlists (channel stopped but cache serving old segments)
+                    hlsInstance.on(Hls.Events.LEVEL_UPDATED, (event, data) => {
+                        const now = Date.now();
+                        const details = data.details;
+
+                        if (details && details.fragments && details.fragments.length > 0) {
+                            // Get the last segment in the playlist
+                            const lastFragment = details.fragments[details.fragments.length - 1];
+                            const segmentIdentifier = lastFragment.sn || lastFragment.url;
+
+                            // Check if we're seeing a NEW segment
+                            if (segmentIdentifier !== lastSegmentSeen) {
+                                console.log('✅ New segment detected:', segmentIdentifier);
+                                lastSegmentSeen = segmentIdentifier;
+                                lastNewSegmentTime = now;
+                            }
+                            // Note: We don't need the else block here anymore since
+                            // checkPlaylistStaleness() handles the periodic checking
+                        }
+                    });
+
+                    hlsInstance.loadSource(url);
+                    hlsInstance.attachMedia(v);
+                    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => v.play().catch(e => {}));
+                    hlsInstance.on(Hls.Events.ERROR, (e, d) => {
                         if (d.fatal) {
                             console.error('HLS Error:', d);
-                            h.destroy();
-                            if (stallCheckInterval) clearInterval(stallCheckInterval);
+                            cleanup();
                             setTimeout(init, 3000);
                         }
                     });
                 } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
                     v.src = url;
                     v.addEventListener('error', () => {
-                        if (stallCheckInterval) clearInterval(stallCheckInterval);
+                        cleanup();
                         setTimeout(init, 3000);
                     });
                 }
