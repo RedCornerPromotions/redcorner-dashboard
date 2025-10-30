@@ -397,109 +397,133 @@ app.delete('/api/recordings/:channel/:fileKey(*)', requireAuth, async (req, res)
     }
 });
 
-// Convert recording to MP4 HEVC
+// Helper function to create MediaConvert job parameters
+function createMediaConvertJobParams(decodedKey, outputKey, outputFilename, isQuick = false) {
+    const suffix = isQuick ? '_quick' : '';
+    const codec = isQuick ? 'H_264' : 'H_265';
+
+    const videoSettings = isQuick ? {
+        // H.264 - Fast encoding
+        Codec: 'H_264',
+        H264Settings: {
+            RateControlMode: 'QVBR',
+            QualityTuningLevel: 'SINGLE_PASS',
+            MaxBitrate: 8000000,
+            QvbrSettings: {
+                QvbrQualityLevel: 7
+            }
+        }
+    } : {
+        // H.265 - High quality, slow encoding
+        Codec: 'H_265',
+        H265Settings: {
+            RateControlMode: 'QVBR',
+            QualityTuningLevel: 'SINGLE_PASS_HQ',
+            MaxBitrate: 8000000,
+            QvbrSettings: {
+                QvbrQualityLevel: 8
+            }
+        }
+    };
+
+    return {
+        Role: MEDIACONVERT_ROLE,
+        AccelerationSettings: {
+            Mode: 'PREFERRED'
+        },
+        Settings: {
+            Inputs: [{
+                FileInput: `s3://${S3_BUCKET}/${decodedKey}`,
+                TimecodeSource: 'ZEROBASED',
+                AudioSelectors: {
+                    'Audio Selector 1': {
+                        DefaultSelection: 'DEFAULT'
+                    }
+                }
+            }],
+            OutputGroups: [{
+                Name: 'File Group',
+                OutputGroupSettings: {
+                    Type: 'FILE_GROUP_SETTINGS',
+                    FileGroupSettings: {
+                        Destination: `s3://${S3_BUCKET}/${outputKey.substring(0, outputKey.lastIndexOf('/') + 1)}`
+                    }
+                },
+                Outputs: [{
+                    ContainerSettings: {
+                        Container: 'MP4',
+                        Mp4Settings: {}
+                    },
+                    VideoDescription: {
+                        CodecSettings: videoSettings
+                    },
+                    AudioDescriptions: [{
+                        AudioSourceName: 'Audio Selector 1',
+                        CodecSettings: {
+                            Codec: 'AAC',
+                            AacSettings: {
+                                Bitrate: 128000,
+                                CodecProfile: 'LC',
+                                CodingMode: 'CODING_MODE_2_0',
+                                SampleRate: 48000
+                            }
+                        }
+                    }],
+                    NameModifier: `_${outputFilename.replace('.mp4', '')}${suffix}`
+                }]
+            }]
+        }
+    };
+}
+
+// Convert recording to MP4 (creates both quick H.264 and HEVC versions)
 app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req, res) => {
     try {
         const { channel, fileKey } = req.params;
         const decodedKey = decodeURIComponent(fileKey);
 
-        console.log('=== CONVERSION REQUEST RECEIVED ===');
+        console.log('=== DUAL CONVERSION REQUEST RECEIVED ===');
         console.log('Channel:', channel);
         console.log('File Key:', decodedKey);
 
         // Get the settings for custom filename
         const settings = loadRecordingSettings();
-        console.log('Settings loaded:', settings);
         const outputFilename = generateDownloadFilename(channel, decodedKey, settings).replace('.ts', '.mp4');
-        console.log('Output filename:', outputFilename);
 
         // Extract just the filename without path
         const inputFilename = decodedKey.split('/').pop();
         const outputKey = decodedKey.replace(inputFilename, outputFilename);
-        console.log('Output key:', outputKey);
 
-        console.log('Building MediaConvert job parameters...');
-        const jobParams = {
-            Role: MEDIACONVERT_ROLE,
-            AccelerationSettings: {
-                Mode: 'PREFERRED'  // Use acceleration when available for faster conversion
-            },
-            Settings: {
-                Inputs: [{
-                    FileInput: `s3://${S3_BUCKET}/${decodedKey}`,
-                    TimecodeSource: 'ZEROBASED',
-                    AudioSelectors: {
-                        'Audio Selector 1': {
-                            DefaultSelection: 'DEFAULT'
-                        }
-                    }
-                }],
-                OutputGroups: [{
-                    Name: 'File Group',
-                    OutputGroupSettings: {
-                        Type: 'FILE_GROUP_SETTINGS',
-                        FileGroupSettings: {
-                            Destination: `s3://${S3_BUCKET}/${outputKey.substring(0, outputKey.lastIndexOf('/') + 1)}`
-                        }
-                    },
-                    Outputs: [{
-                        ContainerSettings: {
-                            Container: 'MP4',
-                            Mp4Settings: {}
-                        },
-                        VideoDescription: {
-                            CodecSettings: {
-                                Codec: 'H_265',
-                                H265Settings: {
-                                    RateControlMode: 'QVBR',
-                                    QualityTuningLevel: 'SINGLE_PASS_HQ',
-                                    MaxBitrate: 8000000,
-                                    QvbrSettings: {
-                                        QvbrQualityLevel: 8
-                                    }
-                                }
-                            }
-                        },
-                        AudioDescriptions: [{
-                            AudioSourceName: 'Audio Selector 1',
-                            CodecSettings: {
-                                Codec: 'AAC',
-                                AacSettings: {
-                                    Bitrate: 128000,
-                                    CodecProfile: 'LC',
-                                    CodingMode: 'CODING_MODE_2_0',
-                                    SampleRate: 48000
-                                }
-                            }
-                        }],
-                        NameModifier: `_${outputFilename.replace('.mp4', '')}`
-                    }]
-                }]
-            }
-        };
+        console.log('Creating QUICK H.264 job...');
+        const quickJobParams = createMediaConvertJobParams(decodedKey, outputKey, outputFilename, true);
+        const quickCommand = new CreateJobCommand(quickJobParams);
+        const quickResponse = await mediaConvertClient.send(quickCommand);
 
-        console.log('Job params created. Sending to MediaConvert...');
-        console.log('Input:', `s3://${S3_BUCKET}/${decodedKey}`);
-        console.log('Destination:', `s3://${S3_BUCKET}/${outputKey.substring(0, outputKey.lastIndexOf('/') + 1)}`);
+        console.log('Quick job created:', quickResponse.Job.Id);
 
-        const command = new CreateJobCommand(jobParams);
-        const response = await mediaConvertClient.send(command);
+        console.log('Creating HEVC job...');
+        const hevcJobParams = createMediaConvertJobParams(decodedKey, outputKey, outputFilename, false);
+        const hevcCommand = new CreateJobCommand(hevcJobParams);
+        const hevcResponse = await mediaConvertClient.send(hevcCommand);
 
-        console.log('MediaConvert job created successfully!');
-        console.log('Job ID:', response.Job.Id);
-        console.log('Job Status:', response.Job.Status);
+        console.log('HEVC job created:', hevcResponse.Job.Id);
 
         res.json({
             success: true,
-            jobId: response.Job.Id,
-            status: response.Job.Status,
-            outputFilename
+            quickJob: {
+                jobId: quickResponse.Job.Id,
+                status: quickResponse.Job.Status,
+                outputFilename: outputFilename.replace('.mp4', '_quick.mp4')
+            },
+            hevcJob: {
+                jobId: hevcResponse.Job.Id,
+                status: hevcResponse.Job.Status,
+                outputFilename: outputFilename
+            }
         });
     } catch (error) {
-        console.error('=== ERROR CREATING MEDIACONVERT JOB ===');
-        console.error('Error name:', error.name);
-        console.error('Error message:', error.message);
-        console.error('Full error:', JSON.stringify(error, null, 2));
+        console.error('=== ERROR CREATING MEDIACONVERT JOBS ===');
+        console.error('Error:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
