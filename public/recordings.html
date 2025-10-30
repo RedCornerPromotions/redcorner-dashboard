@@ -235,7 +235,7 @@
 
     <div id="tab-recordings" class="tab-content active">
         <!-- Recording Controls -->
-        <div class="channel-section" style="margin-bottom: 20px;">
+        <div id="recording-control-section" class="channel-section" style="margin-bottom: 20px; display: none;">
             <h3>Recording Control - Channel 1</h3>
             <div style="display: flex; gap: 15px; align-items: center; margin-top: 15px;">
                 <button class="btn" style="background: #10b981; padding: 12px 24px;" onclick="stopRecording()">
@@ -597,6 +597,9 @@
                 statusDiv.innerHTML = '✓ Recording finalized! Wait 30 more seconds, then refresh page to see the file.';
                 statusDiv.style.color = '#10b981';
 
+                // Update status to show recording control again
+                setTimeout(updateRecordingStatus, 3000);
+
             } catch (error) {
                 statusDiv.innerHTML = '✗ Error: ' + error.message;
                 statusDiv.style.color = '#ef4444';
@@ -629,23 +632,17 @@
                 const response = await fetch('/api/channel/1/status', { credentials: 'include' });
                 const data = await response.json();
 
+                const controlSection = document.getElementById('recording-control-section');
                 const statusDiv = document.getElementById('recording-status');
 
+                // Only show recording control when channel is RUNNING
                 if (data.state === 'RUNNING') {
+                    controlSection.style.display = 'block';
                     statusDiv.innerHTML = '● Recording in progress...';
                     statusDiv.style.color = '#10b981';
-                } else if (data.state === 'IDLE') {
-                    statusDiv.innerHTML = '○ Channel stopped';
-                    statusDiv.style.color = '#999';
-                } else if (data.state === 'STARTING') {
-                    statusDiv.innerHTML = '⏳ Channel starting...';
-                    statusDiv.style.color = '#f59e0b';
-                } else if (data.state === 'STOPPING') {
-                    statusDiv.innerHTML = '⏳ Channel stopping...';
-                    statusDiv.style.color = '#f59e0b';
                 } else {
-                    statusDiv.innerHTML = `○ ${data.state}`;
-                    statusDiv.style.color = '#999';
+                    // Hide the entire recording control section when not recording
+                    controlSection.style.display = 'none';
                 }
             } catch (error) {
                 console.error('Error checking channel status:', error);
