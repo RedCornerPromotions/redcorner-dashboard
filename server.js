@@ -179,7 +179,8 @@ app.listen(PORT, '0.0.0.0', () => {
 // RECORDINGS API ENDPOINTS
 // ==========================================
 
-const { S3Client, ListObjectsV2Command, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, ListObjectsV2Command, GetObjectCommand, DeleteObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const multer = require('multer');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { MediaConvertClient, CreateJobCommand, GetJobCommand } = require('@aws-sdk/client-mediaconvert');
 const fs = require('fs');
@@ -524,6 +525,107 @@ app.get('/api/recordings/convert/status/:jobId', requireAuth, async (req, res) =
     }
 });
 
+// ==========================================
+// HOLDING SLIDE API ENDPOINTS
+// ==========================================
+
+// Configure multer for file upload (memory storage)
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB max
+    },
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only PNG and JPG images are allowed'));
+        }
+    }
+});
+
+// Upload holding slide
+app.post('/api/holding-slide/upload', requireAuth, upload.single('holdingSlide'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No file uploaded' });
+        }
+
+        const fileExtension = path.extname(req.file.originalname);
+        const key = `holding-slides/holding-slide${fileExtension}`;
+
+        const command = new PutObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: key,
+            Body: req.file.buffer,
+            ContentType: req.file.mimetype,
+            ACL: 'private'
+        });
+
+        await s3Client.send(command);
+
+        console.log(`Holding slide uploaded to S3: ${key}`);
+
+        res.json({
+            success: true,
+            s3Path: `s3://${S3_BUCKET}/${key}`,
+            message: 'Holding slide uploaded successfully'
+        });
+    } catch (error) {
+        console.error('Error uploading holding slide:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get current holding slide
+app.get('/api/holding-slide', requireAuth, async (req, res) => {
+    try {
+        // Check for both .png and .jpg
+        const extensions = ['.png', '.jpg', '.jpeg'];
+        let foundKey = null;
+
+        for (const ext of extensions) {
+            const key = `holding-slides/holding-slide${ext}`;
+            try {
+                const command = new ListObjectsV2Command({
+                    Bucket: S3_BUCKET,
+                    Prefix: key,
+                    MaxKeys: 1
+                });
+                const response = await s3Client.send(command);
+                if (response.Contents && response.Contents.length > 0) {
+                    foundKey = response.Contents[0].Key;
+                    break;
+                }
+            } catch (err) {
+                // Continue checking other extensions
+            }
+        }
+
+        if (!foundKey) {
+            return res.json({ success: true, url: null, s3Path: null });
+        }
+
+        // Generate presigned URL for viewing
+        const getCommand = new GetObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: foundKey
+        });
+        const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+
+        res.json({
+            success: true,
+            url: url,
+            s3Path: `${S3_BUCKET}/${foundKey}`
+        });
+    } catch (error) {
+        console.error('Error getting holding slide:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.listen(PORT, '0.0.0.0', () => {
     console.log('==========================================');
     console.log('Red Corner Stream Dashboard - AWS Edition');
     console.log('==========================================');

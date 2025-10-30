@@ -87,6 +87,41 @@
             </div>
         </div>
 
+        <div class="holding-slide-section" style="margin: 20px; padding: 20px; background: #1a1a1a; border-radius: 8px;">
+            <h3 style="color: #60a5fa; margin-bottom: 15px;">Holding Slide - Input Loss Fallback</h3>
+            <p style="color: #999; font-size: 14px; margin-bottom: 15px;">
+                Upload an image to display when the source feed drops. This keeps your streams running with a holding pattern instead of going offline.
+            </p>
+
+            <div style="display: flex; gap: 20px; align-items: flex-start;">
+                <div style="flex: 1;">
+                    <label style="color: #60a5fa; display: block; margin-bottom: 8px; font-weight: 600;">Upload Holding Slide (1920x1080 recommended)</label>
+                    <input type="file" id="holdingSlideInput" accept="image/png,image/jpeg,image/jpg" style="display: none;" onchange="uploadHoldingSlide()">
+                    <button onclick="document.getElementById('holdingSlideInput').click()" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                        Choose Image
+                    </button>
+                    <div id="uploadStatus" style="margin-top: 10px; color: #999; font-size: 13px;"></div>
+                </div>
+
+                <div style="flex: 1;">
+                    <label style="color: #60a5fa; display: block; margin-bottom: 8px; font-weight: 600;">Current Holding Slide</label>
+                    <div id="holdingSlidePreview" style="background: #0a0a0a; border: 2px solid #333; border-radius: 4px; padding: 10px; min-height: 100px;">
+                        <p style="color: #666; text-align: center; padding: 20px;">No holding slide uploaded</p>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; padding: 15px; background: #0a0a0a; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                <p style="color: #f59e0b; font-weight: 600; margin-bottom: 8px;">⚠️ MediaLive Configuration Required</p>
+                <p style="color: #999; font-size: 13px; line-height: 1.6;">
+                    After uploading, configure your MediaLive channel's Input Loss Behavior to use:<br>
+                    <code style="background: #1a1a1a; padding: 4px 8px; border-radius: 3px; color: #00ff88; font-family: monospace;">
+                        s3://<span id="holdingSlideS3Path">your-bucket/holding-slides/holding-slide.png</span>
+                    </code>
+                </p>
+            </div>
+        </div>
+
         <div class="channels-grid">
             <!-- Channel cards will be dynamically created here -->
         </div>
@@ -94,5 +129,75 @@
 
     <script src="dashboard.js"></script>
     <script src="dashboard-destinations.js"></script>
+    <script>
+        async function uploadHoldingSlide() {
+            const input = document.getElementById('holdingSlideInput');
+            const statusDiv = document.getElementById('uploadStatus');
+            const file = input.files[0];
+
+            if (!file) return;
+
+            // Validate file type
+            if (!file.type.match('image/(png|jpeg|jpg)')) {
+                statusDiv.innerHTML = '<span style="color: #ef4444;">Please select a PNG or JPG image</span>';
+                return;
+            }
+
+            // Validate file size (max 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                statusDiv.innerHTML = '<span style="color: #ef4444;">Image must be smaller than 10MB</span>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<span style="color: #f59e0b;">Uploading...</span>';
+
+            try {
+                const formData = new FormData();
+                formData.append('holdingSlide', file);
+
+                const response = await fetch('/api/holding-slide/upload', {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    statusDiv.innerHTML = '<span style="color: #10b981;">✓ Upload successful!</span>';
+                    loadHoldingSlide();
+                } else {
+                    statusDiv.innerHTML = `<span style="color: #ef4444;">✗ Upload failed: ${data.error}</span>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<span style="color: #ef4444;">✗ Upload error</span>';
+            }
+        }
+
+        async function loadHoldingSlide() {
+            try {
+                const response = await fetch('/api/holding-slide', { credentials: 'include' });
+                const data = await response.json();
+
+                const previewDiv = document.getElementById('holdingSlidePreview');
+                const s3PathSpan = document.getElementById('holdingSlideS3Path');
+
+                if (data.success && data.url) {
+                    previewDiv.innerHTML = `
+                        <img src="${data.url}" style="max-width: 100%; border-radius: 4px;" alt="Holding Slide">
+                        <p style="color: #10b981; text-align: center; margin-top: 10px; font-size: 12px;">✓ Active</p>
+                    `;
+                    s3PathSpan.textContent = data.s3Path;
+                } else {
+                    previewDiv.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No holding slide uploaded</p>';
+                }
+            } catch (error) {
+                console.error('Error loading holding slide:', error);
+            }
+        }
+
+        // Load holding slide on page load
+        window.addEventListener('load', loadHoldingSlide);
+    </script>
 </body>
 </html>
