@@ -67,6 +67,38 @@
                 if (!r.ok) { pattern(); return; }
                 document.getElementById('container').innerHTML = '<video id="v" controls autoplay muted playsinline></video>';
                 const v = document.getElementById('v');
+
+                let lastTimeUpdate = Date.now();
+                let lastPosition = 0;
+                let stallCheckInterval;
+
+                // Monitor for stalled playback (stream ended)
+                function checkStall() {
+                    const now = Date.now();
+                    const currentPos = v.currentTime;
+
+                    // If no position change for 10 seconds, assume stream ended
+                    if (currentPos === lastPosition && (now - lastTimeUpdate) > 10000) {
+                        console.log('Stream stalled - switching to pattern');
+                        if (stallCheckInterval) clearInterval(stallCheckInterval);
+                        pattern();
+                        return;
+                    }
+
+                    if (currentPos !== lastPosition) {
+                        lastPosition = currentPos;
+                        lastTimeUpdate = now;
+                    }
+                }
+
+                v.addEventListener('timeupdate', () => {
+                    lastPosition = v.currentTime;
+                    lastTimeUpdate = Date.now();
+                });
+
+                // Start monitoring for stalls every 2 seconds
+                stallCheckInterval = setInterval(checkStall, 2000);
+
                 if (Hls.isSupported()) {
                     const h = new Hls({
                         debug: false,
@@ -81,12 +113,16 @@
                         if (d.fatal) {
                             console.error('HLS Error:', d);
                             h.destroy();
+                            if (stallCheckInterval) clearInterval(stallCheckInterval);
                             setTimeout(init, 3000);
                         }
                     });
                 } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
                     v.src = url;
-                    v.addEventListener('error', () => setTimeout(init, 3000));
+                    v.addEventListener('error', () => {
+                        if (stallCheckInterval) clearInterval(stallCheckInterval);
+                        setTimeout(init, 3000);
+                    });
                 }
             }).catch(() => pattern());
         }
