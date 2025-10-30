@@ -301,7 +301,12 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
                             displayName: generateDownloadFilename(channel, item.Key, settings)
                         }))
                         .sort((a, b) => b.date - a.date); // Newest first
-                    
+
+                    console.log(`Channel ${channel} - After filtering: ${files.length} .m3u8 files`);
+                    if (files.length > 0) {
+                        console.log(`Channel ${channel} - First file: ${files[0].key}`);
+                    }
+
                     recordings.push({
                         channel,
                         files
@@ -311,7 +316,10 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
                 console.error(`Error listing recordings for channel ${channel}:`, err);
             }
         }
-        
+
+        console.log(`Total recordings to return: ${recordings.length} channels with files`);
+        console.log(`Recordings data:`, JSON.stringify(recordings, null, 2));
+
         res.json({ success: true, recordings });
     } catch (error) {
         console.error('Error listing recordings:', error);
