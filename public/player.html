@@ -67,14 +67,31 @@
             if (retryTimer) clearTimeout(retryTimer);
 
             if (reason === 'stale') {
-                // Stale playlist detected - don't retry immediately to avoid loading cached content
-                // Instead, wait 60 seconds to let CloudFront cache expire
-                console.log('Waiting 60s before retry to let CloudFront cache expire...');
+                // Stale playlist detected - DO NOT RETRY from player side
+                // Only retry when server-side status check confirms channel is RUNNING
+                console.log('⛔ Stale content detected - player will NOT auto-retry');
+                console.log('📡 Server status monitoring will restart player when channel resumes');
                 isStale = true;
-                retryTimer = setTimeout(() => {
-                    console.log('Retrying after cache expiry period...');
-                    init();
-                }, 60000); // 60 seconds
+
+                // Start polling server to check when channel comes back online
+                if (retryTimer) clearTimeout(retryTimer);
+                retryTimer = setInterval(async () => {
+                    try {
+                        const response = await fetch(`/api/channel/${channelNum}/status`, { credentials: 'include' });
+                        const data = await response.json();
+
+                        if (data.state === 'RUNNING') {
+                            console.log('✅ Channel is RUNNING again - restarting player');
+                            clearInterval(retryTimer);
+                            retryTimer = null;
+                            init();
+                        } else {
+                            console.log(`Channel status: ${data.state} - waiting...`);
+                        }
+                    } catch (error) {
+                        console.log('Status check error:', error.message);
+                    }
+                }, 10000); // Check every 10 seconds
             } else {
                 // Network error or other issue - retry quickly
                 isStale = false;
@@ -83,13 +100,14 @@
         }
 
         function init() {
-            // Add cache-busting parameter if we're retrying after stale detection
-            const fetchUrl = isStale ? `${url}?t=${Date.now()}` : url;
+            // When init() is called after stale detection, it's because server confirmed RUNNING
+            // Reset stale flag - we're loading fresh live content now
             if (isStale) {
-                console.log('🔄 Retrying with cache-busting parameter to force fresh content');
+                console.log('🔄 Channel confirmed RUNNING - loading fresh stream');
+                isStale = false;
             }
 
-            fetch(fetchUrl).then(r => {
+            fetch(url).then(r => {
                 if (!r.ok) { pattern(); return; }
                 document.getElementById('container').innerHTML = '<video id="v" controls autoplay muted playsinline></video>';
                 const v = document.getElementById('v');
@@ -104,9 +122,13 @@
                 // old segments after the channel stops, making it look like the stream is still live
                 let lastSegmentSeen = null;
                 let lastNewSegmentTime = Date.now();
-                const STALE_THRESHOLD = 20000; // 20 seconds without new segments = stream is dead
-                                                 // MediaLive writes new segments every ~6-10 seconds
-                                                 // So 20 seconds without updates = definitely stopped
+
+                // PROGRAM player needs aggressive detection - this is live event monitoring
+                // PREVIEW player can be more lenient
+                const STALE_THRESHOLD = isProgram ? 12000 : 20000; // Program: 12s, Preview: 20s
+                                                                    // MediaLive writes segments every ~6-10 seconds
+                                                                    // Program gets ~1 segment grace period
+                                                                    // Preview gets ~2 segment grace period
 
                 // Monitor for stalled playback (stream ended)
                 function checkStall() {
@@ -138,9 +160,37 @@
                         clearInterval(stallCheckInterval);
                         stallCheckInterval = null;
                     }
+                    if (statusCheckInterval) {
+                        clearInterval(statusCheckInterval);
+                        statusCheckInterval = null;
+                    }
                     if (hlsInstance) {
                         hlsInstance.destroy();
                         hlsInstance = null;
+                    }
+                }
+
+                // Server-side channel status verification (authoritative source of truth)
+                // For PROGRAM players especially - we need to know channel state immediately
+                let statusCheckInterval = null;
+
+                async function checkChannelStatus() {
+                    try {
+                        const response = await fetch(`/api/channel/${channelNum}/status`, {
+                            credentials: 'include'
+                        });
+                        const data = await response.json();
+
+                        if (data.state !== 'RUNNING') {
+                            console.log(`⚠️ CHANNEL STATUS: ${data.state} (not RUNNING)`);
+                            console.log('Channel stopped - showing offline slide immediately');
+                            cleanup();
+                            if (statusCheckInterval) clearInterval(statusCheckInterval);
+                            pattern('stale');
+                        }
+                    } catch (error) {
+                        // Don't fail on status check errors - playlist monitoring will catch it
+                        console.log('Status check error (non-fatal):', error.message);
                     }
                 }
 
@@ -154,15 +204,24 @@
                         console.log('Channel stopped but CloudFront cache still serving old content');
                         console.log('🔒 HEIST PREVENTED: Not retrying for 60s to avoid cached loop');
                         cleanup();
+                        if (statusCheckInterval) clearInterval(statusCheckInterval);
                         pattern('stale'); // Pass 'stale' reason to prevent immediate retry
                     }
                 }
 
-                // Start monitoring for stalls every 2 seconds
+                // Start monitoring for stalls and staleness every 2 seconds
                 stallCheckInterval = setInterval(() => {
                     checkStall();
                     checkPlaylistStaleness();
                 }, 2000);
+
+                // Start server-side channel status verification
+                // PROGRAM players check aggressively (every 5s) - this is live event monitoring
+                // PREVIEW players check less frequently (every 15s)
+                const statusCheckFrequency = isProgram ? 5000 : 15000;
+                checkChannelStatus(); // Check immediately
+                statusCheckInterval = setInterval(checkChannelStatus, statusCheckFrequency);
+                console.log(`📡 Server-side status monitoring active (every ${statusCheckFrequency/1000}s)`);
 
                 if (Hls.isSupported()) {
                     hlsInstance = new Hls({
@@ -187,19 +246,13 @@
                                 console.log('✅ New segment detected:', segmentIdentifier);
                                 lastSegmentSeen = segmentIdentifier;
                                 lastNewSegmentTime = now;
-
-                                // If we were in stale mode and now seeing new segments, reset the flag
-                                if (isStale) {
-                                    console.log('🎉 Stream recovered! New segments arriving after staleness.');
-                                    isStale = false;
-                                }
                             }
-                            // Note: We don't need the else block here anymore since
-                            // checkPlaylistStaleness() handles the periodic checking
+                            // Note: Staleness checking handled by checkPlaylistStaleness()
+                            // which runs every 2 seconds
                         }
                     });
 
-                    hlsInstance.loadSource(fetchUrl); // Use cache-busted URL if retrying after stale
+                    hlsInstance.loadSource(url);
                     hlsInstance.attachMedia(v);
                     hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => v.play().catch(e => {}));
                     hlsInstance.on(Hls.Events.ERROR, (e, d) => {
@@ -210,7 +263,7 @@
                         }
                     });
                 } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
-                    v.src = fetchUrl; // Use cache-busted URL if retrying after stale
+                    v.src = url;
                     v.addEventListener('error', () => {
                         cleanup();
                         setTimeout(init, 3000);
