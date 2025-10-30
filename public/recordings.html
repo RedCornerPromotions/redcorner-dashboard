@@ -233,6 +233,22 @@
     </div>
 
     <div id="tab-recordings" class="tab-content active">
+        <!-- Recording Controls -->
+        <div class="channel-section" style="margin-bottom: 20px;">
+            <h3>Recording Control - Channel 1</h3>
+            <div style="display: flex; gap: 15px; align-items: center; margin-top: 15px;">
+                <button class="btn" style="background: #10b981; padding: 12px 24px;" onclick="stopRecording()">
+                    Stop & Finalize Recording
+                </button>
+                <div id="recording-status" style="color: #10b981; font-weight: 600;">
+                    ● Recording in progress...
+                </div>
+            </div>
+            <p style="color: #999; margin-top: 10px; font-size: 14px;">
+                Click "Stop & Finalize" to end the current recording session. The channel will stop briefly to finalize the .ts file to S3, then automatically restart. Wait 60 seconds, then refresh to see the new file below.
+            </p>
+        </div>
+
         <div id="recordings-container">
             <div class="loading">Loading recordings...</div>
         </div>
@@ -459,7 +475,51 @@
             }
         }
 
-        async function deleteRecording(channel, fileKey) {
+        async function stopRecording() {
+            if (!confirm('Stop and finalize the current recording? The channel will stop briefly (~60 sec), finalize the .ts file to S3, then automatically restart.')) {
+                return;
+            }
+
+            const statusDiv = document.getElementById('recording-status');
+            statusDiv.innerHTML = '⏳ Stopping channel & finalizing recording...';
+            statusDiv.style.color = '#f59e0b';
+
+            try {
+                // Stop the channel
+                const stopResponse = await fetch('/api/channel/1/stop', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (!stopResponse.ok) {
+                    throw new Error('Failed to stop channel');
+                }
+
+                statusDiv.innerHTML = '⏳ Waiting for file to finalize (30 seconds)...';
+
+                // Wait 30 seconds for archive to finalize
+                await new Promise(resolve => setTimeout(resolve, 30000));
+
+                // Restart the channel
+                const startResponse = await fetch('/api/channel/1/start', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (!startResponse.ok) {
+                    throw new Error('Failed to restart channel');
+                }
+
+                statusDiv.innerHTML = '✓ Recording finalized! Wait 30 more seconds, then refresh page to see the file.';
+                statusDiv.style.color = '#10b981';
+
+            } catch (error) {
+                statusDiv.innerHTML = '✗ Error: ' + error.message;
+                statusDiv.style.color = '#ef4444';
+            }
+        }
+
+        async function deleteRecording(channel, fileKey, conversionId) {
             if (!confirm('Are you sure you want to delete this recording?')) return;
 
             try {
