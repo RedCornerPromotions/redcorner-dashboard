@@ -307,11 +307,6 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
                     const files = response.Contents
                         .filter(item => item.Key.endsWith('.m3u8')) // Only show .m3u8 playlist files
                         .filter(item => item.Size > 100) // Filter out empty/corrupt files
-                        .filter(item => {
-                            // Only show program recordings, not preview or stream
-                            const filename = item.Key.split('/').pop();
-                            return filename.startsWith('program');
-                        })
                         .map(item => ({
                             key: item.Key,
                             size: item.Size,
@@ -322,23 +317,18 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
                         }))
                         .sort((a, b) => b.date - a.date); // Newest first
 
-                    console.log(`Channel ${channel} - After filtering: ${files.length} .m3u8 files`);
+                    // Only add if we have files after filtering
                     if (files.length > 0) {
-                        console.log(`Channel ${channel} - First file: ${files[0].key}`);
+                        recordings.push({
+                            channel,
+                            files
+                        });
                     }
-
-                    recordings.push({
-                        channel,
-                        files
-                    });
                 }
             } catch (err) {
                 console.error(`Error listing recordings for channel ${channel}:`, err);
             }
         }
-
-        console.log(`Total recordings to return: ${recordings.length} channels with files`);
-        console.log(`Recordings data:`, JSON.stringify(recordings, null, 2));
 
         res.json({ success: true, recordings });
     } catch (error) {
