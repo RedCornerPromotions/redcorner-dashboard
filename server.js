@@ -420,6 +420,9 @@ app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req
         console.log('Building MediaConvert job parameters...');
         const jobParams = {
             Role: MEDIACONVERT_ROLE,
+            AccelerationSettings: {
+                Mode: 'PREFERRED'  // Use acceleration when available for faster conversion
+            },
             Settings: {
                 Inputs: [{
                     FileInput: `s3://${S3_BUCKET}/${decodedKey}`,
