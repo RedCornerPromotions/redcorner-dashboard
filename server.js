@@ -275,14 +275,16 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
         
         for (let channel = 1; channel <= 5; channel++) {
             const prefix = `recordings/channel${channel}/program/`;
-            
+            console.log(`Searching S3 path: ${prefix} in bucket: ${S3_BUCKET}`);
+
             const command = new ListObjectsV2Command({
                 Bucket: S3_BUCKET,
                 Prefix: prefix
             });
-            
+
             try {
                 const response = await s3Client.send(command);
+                console.log(`Channel ${channel} - S3 returned ${response.Contents ? response.Contents.length : 0} files`);
                 
                 if (response.Contents && response.Contents.length > 0) {
                     const settings = loadRecordingSettings();
