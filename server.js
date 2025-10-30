@@ -289,7 +289,7 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
         const recordings = [];
         
         for (let channel = 1; channel <= 5; channel++) {
-            const prefix = `medialive/channel${channel}/`;
+            const prefix = `recordings/channel${channel}/program/`;
             console.log(`Searching S3 path: ${prefix} in bucket: ${S3_BUCKET}`);
 
             const command = new ListObjectsV2Command({
@@ -304,11 +304,11 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
                 if (response.Contents && response.Contents.length > 0) {
                     const settings = loadRecordingSettings();
 
-                    const m3u8Files = response.Contents.filter(item => item.Key.endsWith('.m3u8'));
-                    console.log(`Ch${channel}: ${m3u8Files.length} .m3u8 files found`);
+                    const tsFiles = response.Contents.filter(item => item.Key.endsWith('.ts'));
+                    console.log(`Ch${channel}: ${tsFiles.length} .ts files found`);
 
-                    const sizedFiles = m3u8Files.filter(item => item.Size > 100);
-                    console.log(`Ch${channel}: ${sizedFiles.length} files > 100 bytes`);
+                    const sizedFiles = tsFiles.filter(item => item.Size > 10000000); // Only show files > 10MB (archive recordings)
+                    console.log(`Ch${channel}: ${sizedFiles.length} files > 10MB`);
 
                     const files = sizedFiles.map(item => {
                         try {
