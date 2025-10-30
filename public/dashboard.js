@@ -143,7 +143,11 @@ async function startChannel(channelNum) {
 
 // Stop channel
 async function stopChannel(channelNum) {
-    if (!confirm(`Stop Channel ${channelNum}?`)) return;
+    // Warning about active recordings
+    if (!confirm(`⚠️ WARNING: Stopping Channel ${channelNum} will FINALIZE any active recording!\n\nThe current recording session will be saved to S3 as a .ts file.\n\nTo properly manage recordings, use the "Recordings & Downloads" page instead.\n\nContinue stopping the channel?`)) {
+        return;
+    }
+
     const btn = document.getElementById(`stop-${channelNum}`);
     btn.disabled = true;
     btn.textContent = 'Stopping...';
@@ -151,7 +155,7 @@ async function stopChannel(channelNum) {
         const response = await fetch(`/api/channel/${channelNum}/stop`, { method: 'POST' });
         const result = await response.json();
         if (result.success) {
-            alert(`Channel ${channelNum} is stopping.`);
+            alert(`Channel ${channelNum} is stopping.\n\nYour recording will be finalized to S3 in ~30 seconds.\nCheck the Recordings page to see the file.`);
             pollChannelStatus(channelNum);
         } else {
             alert(`Failed: ${result.error}`);
