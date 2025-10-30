@@ -540,10 +540,42 @@
             }
         }
 
+        async function updateRecordingStatus() {
+            try {
+                const response = await fetch('/api/channel/1/status', { credentials: 'include' });
+                const data = await response.json();
+
+                const statusDiv = document.getElementById('recording-status');
+
+                if (data.state === 'RUNNING') {
+                    statusDiv.innerHTML = '● Recording in progress...';
+                    statusDiv.style.color = '#10b981';
+                } else if (data.state === 'IDLE') {
+                    statusDiv.innerHTML = '○ Channel stopped';
+                    statusDiv.style.color = '#999';
+                } else if (data.state === 'STARTING') {
+                    statusDiv.innerHTML = '⏳ Channel starting...';
+                    statusDiv.style.color = '#f59e0b';
+                } else if (data.state === 'STOPPING') {
+                    statusDiv.innerHTML = '⏳ Channel stopping...';
+                    statusDiv.style.color = '#f59e0b';
+                } else {
+                    statusDiv.innerHTML = `○ ${data.state}`;
+                    statusDiv.style.color = '#999';
+                }
+            } catch (error) {
+                console.error('Error checking channel status:', error);
+            }
+        }
+
         // Initialize
         window.addEventListener('load', () => {
             loadRecordings();
             loadSettings();
+            updateRecordingStatus();
+
+            // Update recording status every 5 seconds
+            setInterval(updateRecordingStatus, 5000);
         });
     </script>
 </body>
