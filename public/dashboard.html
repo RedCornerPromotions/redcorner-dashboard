@@ -87,38 +87,46 @@
             </div>
         </div>
 
-        <div class="holding-slide-section" style="margin: 20px; padding: 20px; background: #1a1a1a; border-radius: 8px;">
-            <h3 style="color: #60a5fa; margin-bottom: 15px;">Holding Slide - Input Loss Fallback</h3>
-            <p style="color: #999; font-size: 14px; margin-bottom: 15px;">
-                Upload an image to display when the source feed drops. This keeps your streams running with a holding pattern instead of going offline.
-            </p>
-
-            <div style="display: flex; gap: 20px; align-items: flex-start;">
-                <div style="flex: 1;">
-                    <label style="color: #60a5fa; display: block; margin-bottom: 8px; font-weight: 600;">Upload Holding Slide (1920x1080 recommended)</label>
-                    <input type="file" id="holdingSlideInput" accept="image/png,image/jpeg,image/jpg" style="display: none;" onchange="uploadHoldingSlide()">
-                    <button onclick="document.getElementById('holdingSlideInput').click()" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 600;">
-                        Choose Image
-                    </button>
-                    <div id="uploadStatus" style="margin-top: 10px; color: #999; font-size: 13px;"></div>
-                </div>
-
-                <div style="flex: 1;">
-                    <label style="color: #60a5fa; display: block; margin-bottom: 8px; font-weight: 600;">Current Holding Slide</label>
-                    <div id="holdingSlidePreview" style="background: #0a0a0a; border: 2px solid #333; border-radius: 4px; padding: 10px; min-height: 100px;">
-                        <p style="color: #666; text-align: center; padding: 20px;">No holding slide uploaded</p>
-                    </div>
-                </div>
+        <div class="holding-slide-section" style="margin: 20px; background: #1a1a1a; border-radius: 8px;">
+            <div onclick="toggleHoldingSlide()" style="padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333;">
+                <h3 style="color: #60a5fa; margin: 0;">Holding Slide - Input Loss Fallback</h3>
+                <span id="holdingSlideToggle" style="color: #60a5fa; font-size: 20px;">▶</span>
             </div>
 
-            <div style="margin-top: 20px; padding: 15px; background: #0a0a0a; border-left: 4px solid #f59e0b; border-radius: 4px;">
-                <p style="color: #f59e0b; font-weight: 600; margin-bottom: 8px;">⚠️ MediaLive Configuration Required</p>
-                <p style="color: #999; font-size: 13px; line-height: 1.6;">
-                    After uploading, configure your MediaLive channel's Input Loss Behavior to use:<br>
-                    <code style="background: #1a1a1a; padding: 4px 8px; border-radius: 3px; color: #00ff88; font-family: monospace;">
-                        s3://<span id="holdingSlideS3Path">your-bucket/holding-slides/holding-slide.png</span>
-                    </code>
-                </p>
+            <div id="holdingSlideContent" style="padding: 0 20px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;">
+                <div style="padding: 20px 0;">
+                    <p style="color: #999; font-size: 14px; margin-bottom: 15px;">
+                        Upload an image to display when the source feed drops. This keeps your streams running with a holding pattern instead of going offline.
+                    </p>
+
+                    <div style="display: flex; gap: 20px; align-items: flex-start;">
+                        <div style="flex: 1;">
+                            <label style="color: #60a5fa; display: block; margin-bottom: 8px; font-weight: 600;">Upload Holding Slide (1920x1080 recommended)</label>
+                            <input type="file" id="holdingSlideInput" accept="image/png,image/jpeg,image/jpg" style="display: none;" onchange="uploadHoldingSlide()">
+                            <button onclick="document.getElementById('holdingSlideInput').click()" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                                Choose Image
+                            </button>
+                            <div id="uploadStatus" style="margin-top: 10px; color: #999; font-size: 13px;"></div>
+                        </div>
+
+                        <div style="flex: 1;">
+                            <label style="color: #60a5fa; display: block; margin-bottom: 8px; font-weight: 600;">Current Holding Slide</label>
+                            <div id="holdingSlidePreview" style="background: #0a0a0a; border: 2px solid #333; border-radius: 4px; padding: 10px; min-height: 100px;">
+                                <p style="color: #666; text-align: center; padding: 20px;">No holding slide uploaded</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 20px; padding: 15px; background: #0a0a0a; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                        <p style="color: #f59e0b; font-weight: 600; margin-bottom: 8px;">⚠️ MediaLive Configuration Required</p>
+                        <p style="color: #999; font-size: 13px; line-height: 1.6;">
+                            After uploading, configure your MediaLive channel's Input Loss Behavior to use:<br>
+                            <code style="background: #1a1a1a; padding: 4px 8px; border-radius: 3px; color: #00ff88; font-family: monospace;">
+                                s3://<span id="holdingSlideS3Path">your-bucket/holding-slides/holding-slide.png</span>
+                            </code>
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -198,6 +206,21 @@
 
         // Load holding slide on page load
         window.addEventListener('load', loadHoldingSlide);
+
+        function toggleHoldingSlide() {
+            const content = document.getElementById('holdingSlideContent');
+            const toggle = document.getElementById('holdingSlideToggle');
+
+            if (content.style.maxHeight === '0px' || content.style.maxHeight === '') {
+                content.style.maxHeight = '600px';
+                content.style.padding = '20px';
+                toggle.textContent = '▼';
+            } else {
+                content.style.maxHeight = '0px';
+                content.style.padding = '0 20px';
+                toggle.textContent = '▶';
+            }
+        }
     </script>
 </body>
 </html>

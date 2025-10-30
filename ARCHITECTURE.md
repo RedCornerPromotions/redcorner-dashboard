@@ -44,12 +44,26 @@
 │  │     ├─ Outputs: program_1.m3u8 + program.m3u8                    │ │
 │  │     └─ Destination: S3 (rolling window ~20 segments)             │ │
 │  │                                                                   │ │
-│  │  3️⃣ "program-recording" (?) - Possible archive output            │ │
-│  │     └─ Status: Unknown if active                                 │ │
+│  │  3️⃣ "archive-preview" - Archive Output                            │ │
+│  │     ├─ Continuous .ts recording (raw input, no overlay)          │ │
+│  │     ├─ 30-minute rollover segments                               │ │
+│  │     ├─ Kept permanently in S3 (not deleted)                      │ │
+│  │     └─ Destination: s3://bucket/recordings/channel-1/preview/    │ │
+│  │                                                                   │ │
+│  │  4️⃣ "archive-program" - Archive Output                           │ │
+│  │     ├─ Continuous .ts recording (with overlay)                   │ │
+│  │     ├─ 30-minute rollover segments                               │ │
+│  │     ├─ Kept permanently in S3 (not deleted)                      │ │
+│  │     └─ Destination: s3://bucket/recordings/channel-1/program/    │ │
 │  │                                                                   │ │
 │  │  ADDITIONAL OUTPUTS (dynamic):                                   │ │
 │  │  • RTMP (YouTube/Facebook) - added on demand                     │ │
 │  │  • UDP to MediaConnect - for SRT destinations                    │ │
+│  │                                                                   │ │
+│  │  INPUT LOSS BEHAVIOR:                                            │ │
+│  │  • Configured to show holding slide when source drops            │ │
+│  │  • S3 path: s3://bucket/holding-slides/holding-slide.png         │ │
+│  │  • Uploadable via dashboard UI                                   │ │
 │  └──────────────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────────────┘
                                   │
@@ -59,7 +73,7 @@
 │                   📦 S3 Bucket (Origin)                                │
 │  redcornerliveaws-cloudfronttos3s3bucket9ce6ab04-o5i0suwrjg8o        │
 │                                                                         │
-│  medialive/channel1/                                                   │
+│  medialive/channel1/ (LIVE STREAMING - Rolling window)                │
 │  ├── preview_1.m3u8 (459B) - Master playlist                          │
 │  ├── preview_1_00900.ts (8MB) ┐                                       │
 │  ├── preview_1_00901.ts (8MB) │ Rolling                               │
@@ -75,15 +89,37 @@
 │  ├── program_1_00922.ts (8MB) ┘ of video                             │
 │  │                                                                     │
 │  ├── stream_1.m3u8            - Legacy/alternate preview             │
-│  ├── program.m3u8              - Legacy/alternate program             │
-│  │                                                                     │
-│  └── [CONVERTED FILES from MediaConvert]                              │
-│      ├── Ch1_Program_Wed_Oct_29_2025.mp4 (150MB)                     │
-│      └── Ch1_Preview_Fri_Oct_25_2025.mp4 (200MB)                     │
+│  └── program.m3u8              - Legacy/alternate program             │
 │                                                                         │
-│  ⚠️ .m3u8 playlists constantly updated by MediaLive                   │
-│  ⚠️ Old .ts segments AUTO-DELETED (not archived)                      │
-│  ⚠️ This is LIVE streaming storage, not recording storage             │
+│  recordings/channel-1/ (PERMANENT ARCHIVE RECORDINGS)                 │
+│  ├── preview/                                                          │
+│  │   ├── recording_2025-10-30T14-00-00.ts (4.88GB, 30 min)           │
+│  │   ├── recording_2025-10-30T14-30-00.ts (4.88GB, 30 min)           │
+│  │   └── recording_2025-10-30T15-00-00.ts (4.88GB, 30 min)           │
+│  │                                                                     │
+│  └── program/                                                          │
+│      ├── recording_2025-10-30T14-00-00.ts (4.88GB, 30 min)           │
+│      ├── recording_2025-10-30T14-30-00.ts (4.88GB, 30 min)           │
+│      └── recording_2025-10-30T15-00-00.ts (4.88GB, 30 min)           │
+│                                                                         │
+│  downloads/channel-1/ (CONVERTED MP4 FILES from MediaConvert)         │
+│  ├── preview/                                                          │
+│  │   ├── Ch1_PVW_Thu_Oct_30.mp4 (1.2GB, HEVC quality)                │
+│  │   ├── Ch1_PVW_Thu_Oct_30_quick.mp4 (2.5GB, H.264 fast)            │
+│  │   └── Ch1_PVW_Fri_Oct_31.mp4 (1.2GB, HEVC quality)                │
+│  │                                                                     │
+│  └── program/                                                          │
+│      ├── Ch1_PGM_Thu_Oct_30.mp4 (1.2GB, HEVC quality)                │
+│      ├── Ch1_PGM_Thu_Oct_30_quick.mp4 (2.5GB, H.264 fast)            │
+│      └── Ch1_PGM_Fri_Oct_31.mp4 (1.2GB, HEVC quality)                │
+│                                                                         │
+│  holding-slides/                                                       │
+│  └── holding-slide.png (1920x1080) - Input loss fallback image       │
+│                                                                         │
+│  ⚠️ medialive/ = Live HLS playlists (rolling window, auto-deleted)    │
+│  ✅ recordings/ = Permanent .ts archives (30-min segments)             │
+│  ✅ downloads/ = Converted MP4 files (ready to download/share)         │
+│  ✅ holding-slides/ = Input loss fallback images                       │
 └────────────────────────────────┬───────────────────────────────────────┘
                                  │
                                  ▼
@@ -111,100 +147,227 @@
 │  │  • Activate/Deactivate HTML5 overlay (live switching)            │ │
 │  │  • Add RTMP/SRT destinations                                     │ │
 │  │  • Embedded HLS players (via CloudFront)                         │ │
+│  │  • Cost monitor (running channels, hourly/daily/weekly rates)    │ │
+│  │                                                                   │ │
+│  │  HOLDING SLIDE SECTION (Collapsible):                            │ │
+│  │  • Upload holding slide image (PNG/JPG, max 10MB)                │ │
+│  │  • Preview thumbnail (320x180)                                   │ │
+│  │  • Shows S3 path for MediaLive Input Loss configuration          │ │
+│  │  • Auto-updates when new image uploaded (no restart needed)      │ │
 │  └──────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 │  ┌──────────────────────────────────────────────────────────────────┐ │
-│  │  RECORDINGS PAGE - S3 File Browser                               │ │
+│  │  RECORDINGS & DOWNLOADS PAGE - Dual Tabs                         │ │
 │  │                                                                   │ │
-│  │  Lists .m3u8 files from S3:                                      │ │
-│  │  ✅ Ch1_Preview_Wed_Oct_29_2025.m3u8 (459B)                      │ │
-│  │  ❓ Ch1_Program_Wed_Oct_29_2025.m3u8 (459B) - if overlay active  │ │
+│  │  📹 RECORDINGS TAB:                                              │ │
+│  │  • Lists .ts archive recordings from S3                          │ │
+│  │  • Shows PVW (preview) and PGM (program) recordings              │ │
+│  │  • Displays file size, date, type                                │ │
 │  │                                                                   │ │
-│  │  Actions per file:                                               │ │
-│  │  • [Download] - Downloads .m3u8 (won't play standalone)          │ │
-│  │  • [Convert to MP4] - Triggers MediaConvert job ↓                │ │
+│  │  Recording Control (only visible when channel RUNNING):          │ │
+│  │  • Stop & Finalize Recording button                              │ │
+│  │  • Status: "● Recording in progress..." (green)                  │ │
+│  │  • Hides when channel is IDLE/STOPPED                            │ │
+│  │                                                                   │ │
+│  │  Actions per recording:                                          │ │
+│  │  • [Download .ts] - Downloads source file                        │ │
+│  │  • [Convert to MP4] - Starts DUAL conversion jobs ↓              │ │
+│  │    - Quick H.264 MP4 (~15-20 min, *_quick.mp4)                   │ │
+│  │    - HEVC MP4 (~90 min, high quality)                            │ │
 │  │  • [Delete] - Removes from S3                                    │ │
+│  │  • Real-time progress bars for both conversions                  │ │
+│  │                                                                   │ │
+│  │  📥 DOWNLOADS TAB:                                               │ │
+│  │  • Lists converted .mp4 files from S3 downloads/ folder          │ │
+│  │  • Shows both quick and quality versions                         │ │
+│  │  • Displays file size, codec info (H.264/HEVC)                   │ │
+│  │  • Actions: [Download MP4], [Delete]                             │ │
 │  └──────────────────────────────────────────────────────────────────┘ │
 └────────────────────────────────┬───────────────────────────────────────┘
                                  │
                                  │ User clicks "Convert to MP4"
                                  ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│              🎬 AWS MediaConvert                                       │
+│              🎬 AWS MediaConvert - DUAL CONVERSION STRATEGY            │
 │                                                                         │
-│  Conversion Job:                                                       │
-│  1. Input: s3://bucket/medialive/channel1/preview_1.m3u8              │
-│  2. Reads .m3u8 + fetches ALL referenced .ts segments                 │
-│  3. Transcodes to single MP4:                                          │
-│     • Video: H.265 (HEVC) @ 5 Mbps                                    │
-│     • Audio: AAC @ 128 kbps                                            │
-│  4. Output: s3://bucket/medialive/channel1/                           │
-│             Ch1_Preview_Wed_Oct_29_2025.mp4                            │
-│  5. Dashboard polls job status until complete                         │
+│  When user clicks "Convert to MP4", TWO jobs start simultaneously:    │
 │                                                                         │
-│  ⚠️ Can only convert CURRENT segments in rolling window!              │
-│  ⚠️ Old recordings deleted - cannot recover                            │
+│  🏃 JOB 1: QUICK H.264 CONVERSION                                      │
+│  1. Input: s3://bucket/recordings/channel-1/preview/recording_*.ts    │
+│  2. Transcodes to H.264 MP4:                                           │
+│     • Video: H.264 @ QVBR Quality 7, MaxBitrate 8 Mbps                │
+│     • Audio: AAC @ 128 kbps, CodingMode: CODING_MODE_2_0              │
+│     • Acceleration: Mode 'PREFERRED' (hardware acceleration)           │
+│     • Quality: SINGLE_PASS (fast)                                     │
+│  3. Output: s3://bucket/downloads/channel-1/preview/                  │
+│             Ch1_PVW_Thu_Oct_30_quick.mp4                               │
+│  4. Time: ~15-20 minutes for 30-min recording (2.5GB output)          │
+│  5. Purpose: Fast delivery for clients who need it NOW                │
+│                                                                         │
+│  🎨 JOB 2: HEVC HIGH QUALITY CONVERSION                                │
+│  1. Input: s3://bucket/recordings/channel-1/preview/recording_*.ts    │
+│  2. Transcodes to HEVC MP4:                                            │
+│     • Video: H.265 (HEVC) @ QVBR Quality 8, MaxBitrate 8 Mbps         │
+│     • Audio: AAC @ 128 kbps, CodingMode: CODING_MODE_2_0              │
+│     • Acceleration: Mode 'PREFERRED' (hardware acceleration)           │
+│     • Quality: SINGLE_PASS_HQ (high quality)                          │
+│  3. Output: s3://bucket/downloads/channel-1/preview/                  │
+│             Ch1_PVW_Thu_Oct_30.mp4                                     │
+│  4. Time: ~90 minutes for 30-min recording (1.2GB output)             │
+│  5. Purpose: Smaller, better quality for archival/distribution        │
+│                                                                         │
+│  Dashboard tracks both jobs independently:                             │
+│  • Shows separate progress bars (Quick H.264: 45%, HEVC: 12%)         │
+│  • Updates every 5 seconds                                             │
+│  • Both appear in Downloads tab when complete                         │
+│                                                                         │
+│  ✅ Converts permanent archive recordings (not rolling window)         │
+│  ✅ Recordings kept safe in recordings/ folder                         │
 └────────────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│              ✅ FINAL DELIVERABLE                                      │
+│              ✅ FINAL DELIVERABLES                                     │
 │                                                                         │
-│  Single MP4 file (150-200MB for 3 min video)                          │
-│  • Plays in any video player                                           │
+│  TWO MP4 files from each conversion:                                  │
+│                                                                         │
+│  1️⃣ Quick H.264 MP4 (ready in ~15-20 min)                             │
+│     • File: Ch1_PVW_Thu_Oct_30_quick.mp4 (~2.5GB for 30 min)          │
+│     • Codec: H.264 (widely compatible)                                │
+│     • Quality: Good (QVBR 7)                                          │
+│     • Use case: Immediate client delivery                            │
+│                                                                         │
+│  2️⃣ HEVC MP4 (ready in ~90 min)                                        │
+│     • File: Ch1_PVW_Thu_Oct_30.mp4 (~1.2GB for 30 min)               │
+│     • Codec: H.265/HEVC (superior compression)                        │
+│     • Quality: High (QVBR 8)                                          │
+│     • Use case: Archival, distribution, smaller file size            │
+│                                                                         │
+│  Both files:                                                           │
+│  • Play in modern video players                                       │
 │  • Can be downloaded and shared                                        │
-│  • Stored in S3 permanently (until manually deleted)                  │
+│  • Stored in S3 downloads/ folder permanently                         │
+│  • Listed in Downloads tab with download/delete actions               │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## IAM Roles & Permissions
 
 - **MediaConvertRole** - Allows MediaConvert to read/write S3
+  - Must have S3 read permissions for recordings/ folder
+  - Must have S3 write permissions for downloads/ folder
+
 - **MediaLiveRole** - Allows MediaLive to write to S3
-- **Dashboard credentials** - AWS access key/secret with permissions for:
-  - MediaLive
-  - MediaConnect
-  - S3
-  - MediaConvert
+  - Must have S3 write permissions for medialive/ folder (HLS)
+  - Must have S3 write permissions for recordings/ folder (archive)
+  - Must have S3 read permissions for holding-slides/ folder (input loss)
+
+- **Dashboard credentials (IAM user: redcorner-medialive)** - AWS access key/secret with permissions for:
+  - MediaLive (start/stop channels, describe status, manage outputs)
+  - MediaConnect (create flows, manage destinations)
+  - S3 (list, read, write, delete for all folders)
+  - MediaConvert (create jobs, describe jobs)
+  - S3 PutObject permissions for holding slide uploads
 
 ## Key Understanding Points
 
-### HLS Rolling Window Behavior
+### HLS Rolling Window Behavior (Live Streaming)
 
-1. **Not True Recordings**: MediaLive HLS outputs are LIVE playlists
+1. **Purpose**: Live streaming playback via CloudFront CDN
 2. **Auto-Deletion**: Old .ts segments are automatically deleted (keeps ~20 segments = ~3 minutes)
-3. **Your "3-minute recording from last night" is GONE**: Overwritten by new segments
+3. **Location**: `medialive/channel1/` folder in S3
+4. **Files**: `preview_1.m3u8`, `program_1.m3u8` + rolling .ts segments
+5. **DO NOT USE FOR RECORDING**: These files are constantly overwritten
 
-### Recording Workflow
+### Archive Recording Workflow (Permanent Storage)
 
-To save recordings permanently:
+MediaLive has SEPARATE archive output groups that save permanent recordings:
 
-1. **While channel is running**, the `.m3u8` files show the current rolling window
-2. **Click "Convert to MP4"** while segments still exist
-3. **MediaConvert** creates permanent MP4 file from current segments
-4. **Result**: Downloadable MP4 that plays anywhere
+1. **Archive outputs run continuously** when channel is RUNNING
+2. **30-minute segments** automatically created in `recordings/channel-1/` folder
+3. **Files kept permanently** (not auto-deleted like HLS rolling window)
+4. **Two types**:
+   - `preview/` - Raw input without overlay
+   - `program/` - With HTML5 overlay applied
+5. **Recording control** in dashboard stops channel and finalizes current segment
+
+### Conversion Workflow
+
+To convert archive recordings to MP4:
+
+1. View `.ts` recordings in **Recordings tab**
+2. **Click "Convert to MP4"** to start DUAL conversion
+3. **Two MediaConvert jobs** start simultaneously:
+   - Quick H.264 (~15-20 min) → `*_quick.mp4`
+   - HEVC quality (~90 min) → `*.mp4`
+4. **Track progress** with real-time progress bars
+5. **Download from Downloads tab** when complete
 
 ### Output Groups Explained
 
-- **"preview"** = Raw incoming video (no overlay)
-  - Files: `preview_1.m3u8`, `stream_1.m3u8`
+MediaLive Channel 1 has FOUR output groups:
 
-- **"program"** = Video with dynamic HTML5 overlay applied
-  - Files: `program_1.m3u8`, `program.m3u8`
-  - Overlay URL set via Schedule Actions (live switching, no channel restart)
+1. **"preview"** (HLS Output) = Raw incoming video (no overlay)
+   - Files: `preview_1.m3u8`, `stream_1.m3u8` in `medialive/channel1/`
+   - Purpose: Live streaming of raw input
+   - Rolling window: ~3 minutes of segments
 
-- **"program-recording"** = Possible archive output (status unknown)
+2. **"program"** (HLS Output) = Video with dynamic HTML5 overlay
+   - Files: `program_1.m3u8`, `program.m3u8` in `medialive/channel1/`
+   - Purpose: Live streaming with overlay
+   - Overlay URL set via Schedule Actions (live switching, no channel restart)
+   - Rolling window: ~3 minutes of segments
 
-### Current Issue
+3. **"archive-preview"** (Archive Output) = Permanent recordings without overlay
+   - Files: `recording_*.ts` in `recordings/channel-1/preview/`
+   - Purpose: Permanent storage of raw input
+   - 30-minute segments, kept permanently
 
-**Why only preview showing in dashboard:**
-- API found: `preview_1.m3u8` ✅
-- Missing: `program_1.m3u8` ❓
+4. **"archive-program"** (Archive Output) = Permanent recordings with overlay
+   - Files: `recording_*.ts` in `recordings/channel-1/program/`
+   - Purpose: Permanent storage with overlay
+   - 30-minute segments, kept permanently
 
-**Possible reasons:**
-1. Program output not recording (overlay not active)
-2. File exists but filtered out by code
-3. File was deleted/rotated
+### Input Loss Behavior
+
+When the source video feed drops:
+
+1. MediaLive detects input loss
+2. Switches to configured holding slide
+3. Holding slide path: `s3://bucket/holding-slides/holding-slide.png`
+4. Configured via MediaLive Input Loss Behavior settings
+5. Uploadable via dashboard UI (collapsible section)
+6. Auto-updates when new image uploaded (MediaLive reads from S3 on input loss)
+
+### Player Stall Detection
+
+The HLS player (`player.html`) monitors stream health:
+
+1. **Timeupdate monitoring**: Tracks video position changes
+2. **10-second stall threshold**: If position unchanged for 10 seconds
+3. **Auto-pattern display**: Shows "Channel X - PROGRAM/PREVIEW - No stream available"
+4. **Auto-retry**: Attempts to reconnect every 3 seconds
+5. **Use case**: When channel stops, shows offline slide after ~40 seconds total:
+   - 30 seconds of HLS buffer draining
+   - 10 seconds of stall detection
+   - Clean offline experience instead of frozen frame
+
+### Dashboard UI Features
+
+1. **Collapsible sections**: Save dashboard real estate
+   - Holding slide section collapses with ▶/▼ toggle
+   - Click header to expand/collapse
+   - Smooth max-height transition animation
+
+2. **Dynamic recording control visibility**:
+   - Only shows when channel is RUNNING/STARTING/STOPPING
+   - Hides when channel is IDLE (no confusion for users)
+   - Status indicator: Green "● Recording in progress..." when active
+
+3. **Dual tab interface** (Recordings & Downloads):
+   - Recordings tab: Source .ts files with Convert button
+   - Downloads tab: Converted .mp4 files
+   - Clear separation of source vs final deliverables
 
 ### AWS Services Integration
 
@@ -213,27 +376,63 @@ Video Input
     ↓
 MediaConnect (optional, for SRT)
     ↓
-MediaLive (encodes, adds overlay, outputs HLS)
+MediaLive (encodes, adds overlay, outputs HLS + Archive)
     ↓
-S3 (storage, rolling window)
+S3 (storage: HLS rolling window + permanent recordings)
     ↓
-CloudFront (CDN delivery)
+CloudFront (CDN delivery for live streams)
     ↓
-Dashboard (playback + management)
+Dashboard (playback + management + recording control)
     ↓
-MediaConvert (HLS → MP4 on demand)
+MediaConvert (Dual .ts → MP4 conversion: Quick H.264 + HEVC)
+    ↓
+Downloads (Both MP4s available in Downloads tab)
 ```
 
-## Important Files
+## Important Files and Paths
 
+### S3 Bucket Structure
 - **Bucket**: `redcornerliveaws-cloudfronttos3s3bucket9ce6ab04-o5i0suwrjg8o`
-- **CloudFront**: `d2njmhq33zb6p4.cloudfront.net`
-- **HLS Path**: `medialive/channel1/`
+- **HLS Live Path**: `medialive/channel1/` (rolling window)
+- **Archive Recordings**: `recordings/channel-1/preview/` and `recordings/channel-1/program/`
+- **Converted Downloads**: `downloads/channel-1/preview/` and `downloads/channel-1/program/`
+- **Holding Slides**: `holding-slides/holding-slide.png`
+
+### CloudFront CDN
+- **Domain**: `d2njmhq33zb6p4.cloudfront.net`
 - **Preview URL**: `https://d2njmhq33zb6p4.cloudfront.net/medialive/channel1/preview_1.m3u8`
 - **Program URL**: `https://d2njmhq33zb6p4.cloudfront.net/medialive/channel1/program_1.m3u8`
+
+### Dashboard URLs
+- **Main Dashboard**: `http://lightsail-ip:3000/dashboard.html`
+- **Recordings & Downloads**: `http://lightsail-ip:3000/recordings.html`
+- **Multiview**: `http://lightsail-ip:3000/multiview.html`
+- **Player**: `http://lightsail-ip:3000/player.html?channel=1` (or `?channel=program1`)
+
+### IAM Resources
+- **MediaLive Role**: `MediaLiveRole`
+- **MediaConvert Role**: `MediaConvertRole`
+- **Dashboard User**: `redcorner-medialive` (IAM user with access key)
+
+---
+
+## Recent Features Added
+
+- ✅ Archive recording outputs (30-min segments, permanent storage)
+- ✅ Dual MediaConvert conversion (Quick H.264 + HEVC simultaneously)
+- ✅ Hardware acceleration for faster conversions
+- ✅ Separate Downloads tab for MP4 files
+- ✅ Holding slide upload for input loss fallback
+- ✅ Collapsible dashboard sections to save space
+- ✅ Dynamic recording control visibility (only when channel active)
+- ✅ Player stall detection for clean offline display
+- ✅ Simplified filename format (e.g., `Ch1_PGM_Thu_Oct_30.mp4`)
+- ✅ Real-time dual conversion progress tracking
 
 ---
 
 **Document created**: 2025-10-30
-**Purpose**: Reference for Red Corner AWS MediaLive streaming architecture
+**Last updated**: 2025-10-30
+**Purpose**: Complete reference for Red Corner AWS MediaLive streaming architecture
 **Note**: Keep this for when things break (because they will)
+**Status**: Channel 1 fully configured and operational. Channels 2-5 not yet configured.
