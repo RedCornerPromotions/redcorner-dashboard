@@ -90,7 +90,7 @@ class AWSMediaLiveManager {
             return {
                 success: true, channelNumber, channelId,
                 name: this.channelNames[channelNumber],
-                state: response.State,
+                state: response.State || 'UNKNOWN',
                 pipelinesRunning: response.PipelinesRunningCount || 0
             };
         } catch (error) {
