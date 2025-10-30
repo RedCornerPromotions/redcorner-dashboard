@@ -304,18 +304,30 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
                 if (response.Contents && response.Contents.length > 0) {
                     const settings = loadRecordingSettings();
 
-                    const files = response.Contents
-                        .filter(item => item.Key.endsWith('.m3u8')) // Only show .m3u8 playlist files
-                        .filter(item => item.Size > 100) // Filter out empty/corrupt files
-                        .map(item => ({
-                            key: item.Key,
-                            size: item.Size,
-                            sizeFormatted: formatFileSize(item.Size),
-                            date: item.LastModified,
-                            dateFormatted: formatDate(new Date(item.LastModified)),
-                            displayName: generateDownloadFilename(channel, item.Key, settings, new Date(item.LastModified))
-                        }))
-                        .sort((a, b) => b.date - a.date); // Newest first
+                    const m3u8Files = response.Contents.filter(item => item.Key.endsWith('.m3u8'));
+                    console.log(`Ch${channel}: ${m3u8Files.length} .m3u8 files found`);
+
+                    const sizedFiles = m3u8Files.filter(item => item.Size > 100);
+                    console.log(`Ch${channel}: ${sizedFiles.length} files > 100 bytes`);
+
+                    const files = sizedFiles.map(item => {
+                        try {
+                            return {
+                                key: item.Key,
+                                size: item.Size,
+                                sizeFormatted: formatFileSize(item.Size),
+                                date: item.LastModified,
+                                dateFormatted: formatDate(new Date(item.LastModified)),
+                                displayName: generateDownloadFilename(channel, item.Key, settings, new Date(item.LastModified))
+                            };
+                        } catch (err) {
+                            console.error(`Error mapping file ${item.Key}:`, err);
+                            return null;
+                        }
+                    }).filter(item => item !== null)
+                      .sort((a, b) => b.date - a.date);
+
+                    console.log(`Ch${channel}: ${files.length} files after mapping`);
 
                     // Only add if we have files after filtering
                     if (files.length > 0) {
