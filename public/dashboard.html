@@ -65,24 +65,32 @@
             <button id="logoutBtn">Logout</button>
         </header>
 
-        <div class="cost-monitor">
-            <h3>Cost Monitor</h3>
-            <div class="cost-grid">
-                <div class="cost-item">
-                    <span class="cost-label">Running Channels:</span>
-                    <span class="cost-value" id="runningChannels">0</span>
-                </div>
-                <div class="cost-item">
-                    <span class="cost-label">Cost/Hour:</span>
-                    <span class="cost-value" id="costPerHour">$0.00</span>
-                </div>
-                <div class="cost-item">
-                    <span class="cost-label">Cost/Day:</span>
-                    <span class="cost-value" id="costPerDay">$0.00</span>
-                </div>
-                <div class="cost-item">
-                    <span class="cost-label">Cost/Week:</span>
-                    <span class="cost-value" id="costPerWeek">$0.00</span>
+        <div class="cost-monitor" style="background: #1a1a1a; border-radius: 8px; margin: 20px;">
+            <div onclick="toggleCostMonitor()" style="padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333;">
+                <h3 style="color: #60a5fa; margin: 0;">Cost Monitor</h3>
+                <span id="costMonitorToggle" style="color: #60a5fa; font-size: 20px;">▶</span>
+            </div>
+
+            <div id="costMonitorContent" style="padding: 0 20px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;">
+                <div style="padding: 20px 0;">
+                    <div class="cost-grid">
+                        <div class="cost-item">
+                            <span class="cost-label">Running Channels:</span>
+                            <span class="cost-value" id="runningChannels">0</span>
+                        </div>
+                        <div class="cost-item">
+                            <span class="cost-label">Cost/Hour:</span>
+                            <span class="cost-value" id="costPerHour">$0.00</span>
+                        </div>
+                        <div class="cost-item">
+                            <span class="cost-label">Cost/Day:</span>
+                            <span class="cost-value" id="costPerDay">$0.00</span>
+                        </div>
+                        <div class="cost-item">
+                            <span class="cost-label">Cost/Week:</span>
+                            <span class="cost-value" id="costPerWeek">$0.00</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -214,6 +222,21 @@
             if (content.style.maxHeight === '0px' || content.style.maxHeight === '') {
                 content.style.maxHeight = '600px';
                 content.style.padding = '20px';
+                toggle.textContent = '▼';
+            } else {
+                content.style.maxHeight = '0px';
+                content.style.padding = '0 20px';
+                toggle.textContent = '▶';
+            }
+        }
+
+        function toggleCostMonitor() {
+            const content = document.getElementById('costMonitorContent');
+            const toggle = document.getElementById('costMonitorToggle');
+
+            if (content.style.maxHeight === '0px' || content.style.maxHeight === '') {
+                content.style.maxHeight = '400px';
+                content.style.padding = '0 20px';
                 toggle.textContent = '▼';
             } else {
                 content.style.maxHeight = '0px';
