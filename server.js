@@ -291,7 +291,7 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
 
                     const files = response.Contents
                         .filter(item => item.Key.endsWith('.m3u8')) // Only show .m3u8 playlist files
-                        .filter(item => item.Size > 1000) // Filter out tiny files
+                        .filter(item => item.Size > 100) // Filter out empty/corrupt files
                         .map(item => ({
                             key: item.Key,
                             size: item.Size,
