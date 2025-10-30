@@ -57,58 +57,72 @@ function createChannelCards() {
                     </div>
                 </div>
 
-                <div class="destination-section">
-                    <h4>Stream Destination</h4>
-                    <p class="destination-help">⚠ Configure destination BEFORE starting channel. Channel must be IDLE to change.</p>
+                <div class="collapsible-section" style="margin-top: 15px; background: #1a1a2e; border-radius: 8px;">
+                    <div onclick="toggleDestinations(${i})" style="padding: 12px 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333;">
+                        <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">Stream Destination</h4>
+                        <span id="dest-toggle-${i}" style="color: #e74c3c; font-size: 18px;">▶</span>
+                    </div>
 
-                    <div id="dest-status-${i}" class="destination-status">
-                        <div class="destination-idle">
-                            <span class="dest-indicator-idle">⚪ No destination configured</span>
+                    <div id="dest-content-${i}" style="padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;">
+                        <div style="padding: 15px 0;">
+                            <p class="destination-help">⚠ Configure destination BEFORE starting channel. Channel must be IDLE to change.</p>
+
+                            <div id="dest-status-${i}" class="destination-status">
+                                <div class="destination-idle">
+                                    <span class="dest-indicator-idle">⚪ No destination configured</span>
+                                </div>
+                            </div>
+
+                            <div class="dest-type-tabs">
+                                <button class="dest-tab active" id="dest-tab-rtmp-${i}" onclick="toggleDestinationType(${i}, 'rtmp')">
+                                    RTMP (YouTube, Facebook)
+                                </button>
+                                <button class="dest-tab" id="dest-tab-srt-${i}" onclick="toggleDestinationType(${i}, 'srt')">
+                                    SRT (CASTR)
+                                </button>
+                            </div>
+
+                            <div class="dest-quick-fill">
+                                <strong>Quick Fill:</strong>
+                                <button class="btn btn-small" onclick="fillCASTR(${i})">CASTR SRT</button>
+                                <button class="btn btn-small" onclick="fillYouTube(${i})">YouTube</button>
+                                <button class="btn btn-small" onclick="fillFacebook(${i})">Facebook</button>
+                            </div>
+
+                            <div id="rtmp-form-${i}" class="dest-config-form">
+                                <input type="text" id="rtmp-url-${i}" placeholder="RTMP URL (e.g., rtmp://a.rtmp.youtube.com/live2)" class="dest-input">
+                                <input type="text" id="stream-key-${i}" placeholder="Stream Key" class="dest-input">
+                                <input type="text" id="dest-name-${i}" placeholder="Destination Name" class="dest-input">
+                                <button class="btn btn-small btn-primary" onclick="configureRTMP(${i})">Configure RTMP</button>
+                            </div>
+
+                            <div id="srt-form-${i}" class="dest-config-form" style="display: none;">
+                                <input type="text" id="srt-url-${i}" placeholder="SRT URL (e.g., srt://au.castr.io:9998)" class="dest-input">
+                                <textarea id="srt-stream-id-${i}" placeholder="Stream ID" class="dest-textarea" rows="3"></textarea>
+                                <button class="btn btn-small btn-primary" onclick="configureSRT(${i})">Configure SRT</button>
+                            </div>
+                            <div style="margin-top: 10px;">
+                                <button class="btn btn-small btn-danger" onclick="removeDestinationUI(${i})">Remove All Destinations</button>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="dest-type-selector">
-                        <label>
-                            <input type="radio" name="dest-type-${i}" id="dest-type-rtmp-${i}" value="rtmp" checked onclick="toggleDestinationType(${i}, 'rtmp')">
-                            RTMP (YouTube, Facebook, etc.)
-                        </label>
-                        <label>
-                            <input type="radio" name="dest-type-${i}" id="dest-type-srt-${i}" value="srt" onclick="toggleDestinationType(${i}, 'srt')">
-                            SRT (CASTR, etc.)
-                        </label>
-                    </div>
-
-                    <div class="dest-quick-fill">
-                        <strong>Quick Fill:</strong>
-                        <button class="btn btn-small" onclick="fillCASTR(${i})">CASTR SRT</button>
-                        <button class="btn btn-small" onclick="fillYouTube(${i})">YouTube</button>
-                        <button class="btn btn-small" onclick="fillFacebook(${i})">Facebook</button>
-                    </div>
-
-                    <div id="rtmp-form-${i}" class="dest-config-form">
-                        <input type="text" id="rtmp-url-${i}" placeholder="RTMP URL (e.g., rtmp://a.rtmp.youtube.com/live2)" class="dest-input">
-                        <input type="text" id="stream-key-${i}" placeholder="Stream Key" class="dest-input">
-                        <input type="text" id="dest-name-${i}" placeholder="Destination Name" class="dest-input">
-                        <button class="btn btn-primary" onclick="configureRTMP(${i})">Configure RTMP</button>
-                    </div>
-
-                    <div id="srt-form-${i}" class="dest-config-form" style="display: none;">
-                        <input type="text" id="srt-url-${i}" placeholder="SRT URL (e.g., srt://au.castr.io:9998)" class="dest-input">
-                        <textarea id="srt-stream-id-${i}" placeholder="Stream ID" class="dest-textarea" rows="3"></textarea>
-                        <button class="btn btn-primary" onclick="configureSRT(${i})">Configure SRT</button>
-                    </div>
-                    <div style="margin-top: 10px;">
-                        <button class="btn btn-danger" onclick="removeDestinationUI(${i})">Remove All Destinations</button>
                     </div>
                 </div>
 
-                <div class="overlay-section">
-                    <h4>HTML5 Overlay (Live Switching)</h4>
-                    <p class="overlay-help">Change overlays instantly while channel is RUNNING - no restart needed!</p>
-                    <input type="text" id="overlay-url-${i}" placeholder="https://ligr.live/overlay/..." class="overlay-input">
-                    <div class="overlay-controls">
-                        <button class="btn btn-primary" onclick="enableOverlay(${i})">Activate Overlay</button>
-                        <button class="btn btn-secondary" onclick="disableOverlay(${i})">Remove Overlay</button>
+                <div class="collapsible-section" style="margin-top: 15px; background: #1a1a2e; border-radius: 8px;">
+                    <div onclick="toggleOverlay(${i})" style="padding: 12px 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333;">
+                        <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">HTML5 Overlay (Live Switching)</h4>
+                        <span id="overlay-toggle-${i}" style="color: #e74c3c; font-size: 18px;">▶</span>
+                    </div>
+
+                    <div id="overlay-content-${i}" style="padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;">
+                        <div style="padding: 15px 0;">
+                            <p class="overlay-help">Change overlays instantly while channel is RUNNING - no restart needed!</p>
+                            <input type="text" id="overlay-url-${i}" placeholder="https://ligr.live/overlay/..." class="overlay-input">
+                            <div class="overlay-controls">
+                                <button class="btn btn-small btn-success" onclick="enableOverlay(${i})">Activate Overlay</button>
+                                <button class="btn btn-small btn-danger" onclick="disableOverlay(${i})">Remove Overlay</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -296,6 +310,37 @@ async function refreshCosts() {
         document.getElementById('costPerWeek').textContent = `$${costs.costPerWeek.toFixed(2)}`;
     } catch (error) {
         console.error('Error refreshing costs:', error);
+    }
+}
+
+// Toggle collapsible sections
+function toggleDestinations(channelNum) {
+    const content = document.getElementById(`dest-content-${channelNum}`);
+    const toggle = document.getElementById(`dest-toggle-${channelNum}`);
+
+    if (content.style.maxHeight === '0px' || content.style.maxHeight === '') {
+        content.style.maxHeight = '600px';
+        content.style.padding = '0 15px';
+        toggle.textContent = '▼';
+    } else {
+        content.style.maxHeight = '0px';
+        content.style.padding = '0 15px';
+        toggle.textContent = '▶';
+    }
+}
+
+function toggleOverlay(channelNum) {
+    const content = document.getElementById(`overlay-content-${channelNum}`);
+    const toggle = document.getElementById(`overlay-toggle-${channelNum}`);
+
+    if (content.style.maxHeight === '0px' || content.style.maxHeight === '') {
+        content.style.maxHeight = '400px';
+        content.style.padding = '0 15px';
+        toggle.textContent = '▼';
+    } else {
+        content.style.maxHeight = '0px';
+        content.style.padding = '0 15px';
+        toggle.textContent = '▶';
     }
 }
 

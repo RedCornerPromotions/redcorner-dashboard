@@ -122,13 +122,19 @@ function updateDestinationUI(channelNum, type, name, url) {
 function toggleDestinationType(channelNum, type) {
     const rtmpForm = document.getElementById(`rtmp-form-${channelNum}`);
     const srtForm = document.getElementById(`srt-form-${channelNum}`);
+    const rtmpTab = document.getElementById(`dest-tab-rtmp-${channelNum}`);
+    const srtTab = document.getElementById(`dest-tab-srt-${channelNum}`);
 
     if (type === 'rtmp') {
         rtmpForm.style.display = 'block';
         srtForm.style.display = 'none';
+        rtmpTab.classList.add('active');
+        srtTab.classList.remove('active');
     } else {
         rtmpForm.style.display = 'none';
         srtForm.style.display = 'block';
+        rtmpTab.classList.remove('active');
+        srtTab.classList.add('active');
     }
 }
 
