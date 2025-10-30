@@ -403,11 +403,22 @@ Downloads (Both MP4s available in Downloads tab)
 - **Preview URL**: `https://d2njmhq33zb6p4.cloudfront.net/medialive/channel1/preview_1.m3u8`
 - **Program URL**: `https://d2njmhq33zb6p4.cloudfront.net/medialive/channel1/program_1.m3u8`
 
-### Dashboard URLs
-- **Main Dashboard**: `http://lightsail-ip:3000/dashboard.html`
-- **Recordings & Downloads**: `http://lightsail-ip:3000/recordings.html`
-- **Multiview**: `http://lightsail-ip:3000/multiview.html`
-- **Player**: `http://lightsail-ip:3000/player.html?channel=1` (or `?channel=program1`)
+### Lightsail Hosting Infrastructure
+- **Static IP**: `15.134.99.64`
+- **Domain**: `dashboard.redcorner.com.au` (DNS via Wix)
+- **SSL Certificate**: Let's Encrypt (auto-renews every 90 days)
+- **Reverse Proxy**: Nginx
+  - Listens on ports 80 (HTTP) and 443 (HTTPS)
+  - Proxies to Node.js app on localhost:3000
+  - Handles SSL termination
+  - Auto-redirects HTTP → HTTPS
+
+### Dashboard URLs (Production)
+- **Main Dashboard**: `https://dashboard.redcorner.com.au/dashboard.html`
+- **Recordings & Downloads**: `https://dashboard.redcorner.com.au/recordings.html`
+- **Multiview**: `https://dashboard.redcorner.com.au/multiview.html`
+- **Player**: `https://dashboard.redcorner.com.au/player.html?channel=1` (or `?channel=program1`)
+- **Login**: `https://dashboard.redcorner.com.au/` (secured with SSL)
 
 ### IAM Resources
 - **MediaLive Role**: `MediaLiveRole`
@@ -418,21 +429,61 @@ Downloads (Both MP4s available in Downloads tab)
 
 ## Recent Features Added
 
-- ✅ Archive recording outputs (30-min segments, permanent storage)
-- ✅ Dual MediaConvert conversion (Quick H.264 + HEVC simultaneously)
-- ✅ Hardware acceleration for faster conversions
-- ✅ Separate Downloads tab for MP4 files
-- ✅ Holding slide upload for input loss fallback
-- ✅ Collapsible dashboard sections to save space
-- ✅ Dynamic recording control visibility (only when channel active)
-- ✅ Player stall detection for clean offline display
-- ✅ Simplified filename format (e.g., `Ch1_PGM_Thu_Oct_30.mp4`)
-- ✅ Real-time dual conversion progress tracking
+### Security & Infrastructure
+- ✅ **HTTPS/SSL Setup** - Let's Encrypt certificate with auto-renewal
+- ✅ **Custom Domain** - dashboard.redcorner.com.au with SSL
+- ✅ **Nginx Reverse Proxy** - Professional production setup
+- ✅ **AWS Security** - Compromised keys rotated, account secured
+- ✅ **Zero-Cache HLS Detection** - Prevents stale content loops (no "heist movie" cached footage)
+
+### Video Processing
+- ✅ **Archive Recording Outputs** - 30-min segments, permanent storage
+- ✅ **Dual MediaConvert Conversion** - Quick H.264 + HEVC simultaneously
+- ✅ **Hardware Acceleration** - Faster conversions with AWS acceleration
+- ✅ **Separate Downloads Tab** - MP4 files separate from source recordings
+- ✅ **Simplified Filename Format** - e.g., `Ch1_PGM_Thu_Oct_30.mp4`
+- ✅ **Real-time Dual Conversion Progress Tracking** - Monitor both jobs independently
+
+### User Interface
+- ✅ **Professional Blue Color Scheme** - Calming blue instead of harsh red warnings
+- ✅ **Collapsible Dashboard Sections** - Cost Monitor, Holding Slide, Destinations, Overlays
+- ✅ **Tab-Style Type Selector** - Easy RTMP/SRT selection (replaced hard-to-see radio buttons)
+- ✅ **Compact Button Styling** - Green (activate) / Red (remove) / Blue (info)
+- ✅ **Dynamic Recording Control Visibility** - Only shows when channel active
+
+### Player Features
+- ✅ **HLS Playlist Staleness Detection** - PROGRAM: 12s, PREVIEW: 20s thresholds
+- ✅ **Server-Side Channel Status Verification** - Authoritative state checking
+- ✅ **Zero Blind Retries** - Only reconnects when channel confirmed RUNNING
+- ✅ **Clean Offline Display** - Shows "No stream available" when channel stops
+
+### Content Management
+- ✅ **Holding Slide Upload** - Input loss fallback with thumbnail preview
+- ✅ **Auto-Update Holding Slide** - MediaLive reads from S3 on input loss
+
+---
+
+## Security Notes
+
+### AWS Account Security (Oct 2025)
+- **Issue**: Access keys accidentally exposed to public GitHub repository (Oct 26-29)
+- **Resolution**: Keys rotated Oct 29, repository made private, AWS support case closed
+- **Prevention**:
+  - `.env` properly in `.gitignore`
+  - Repository set to private
+  - Regular key rotation implemented
+
+### SSL Certificate Management
+- **Provider**: Let's Encrypt (free, trusted)
+- **Domain**: dashboard.redcorner.com.au
+- **Auto-Renewal**: Certbot handles renewal automatically
+- **Expiry**: 90 days (renews at 60 days automatically)
+- **Location**: `/etc/letsencrypt/live/dashboard.redcorner.com.au/`
 
 ---
 
 **Document created**: 2025-10-30
-**Last updated**: 2025-10-30
+**Last updated**: 2025-10-30 (HTTPS setup, security updates, UI improvements)
 **Purpose**: Complete reference for Red Corner AWS MediaLive streaming architecture
 **Note**: Keep this for when things break (because they will)
 **Status**: Channel 1 fully configured and operational. Channels 2-5 not yet configured.
