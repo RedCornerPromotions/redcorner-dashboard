@@ -274,7 +274,7 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
         const recordings = [];
         
         for (let channel = 1; channel <= 5; channel++) {
-            const prefix = `recordings/channel${channel}/program/`;
+            const prefix = `medialive/channel${channel}/`;
             console.log(`Searching S3 path: ${prefix} in bucket: ${S3_BUCKET}`);
 
             const command = new ListObjectsV2Command({
@@ -285,11 +285,12 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
             try {
                 const response = await s3Client.send(command);
                 console.log(`Channel ${channel} - S3 returned ${response.Contents ? response.Contents.length : 0} files`);
-                
+
                 if (response.Contents && response.Contents.length > 0) {
                     const settings = loadRecordingSettings();
-                    
+
                     const files = response.Contents
+                        .filter(item => item.Key.endsWith('.m3u8')) // Only show .m3u8 playlist files
                         .filter(item => item.Size > 1000) // Filter out tiny files
                         .map(item => ({
                             key: item.Key,
