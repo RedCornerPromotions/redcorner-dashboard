@@ -422,12 +422,16 @@ app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req
 
         // Get the settings for custom filename
         const settings = loadRecordingSettings();
+        console.log('Settings loaded:', settings);
         const outputFilename = generateDownloadFilename(channel, decodedKey, settings).replace('.ts', '.mp4');
+        console.log('Output filename:', outputFilename);
 
         // Extract just the filename without path
         const inputFilename = decodedKey.split('/').pop();
         const outputKey = decodedKey.replace(inputFilename, outputFilename);
+        console.log('Output key:', outputKey);
 
+        console.log('Building MediaConvert job parameters...');
         const jobParams = {
             Role: MEDIACONVERT_ROLE,
             Settings: {
@@ -478,8 +482,16 @@ app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req
             }
         };
 
+        console.log('Job params created. Sending to MediaConvert...');
+        console.log('Input:', `s3://${S3_BUCKET}/${decodedKey}`);
+        console.log('Destination:', `s3://${S3_BUCKET}/${outputKey.substring(0, outputKey.lastIndexOf('/') + 1)}`);
+
         const command = new CreateJobCommand(jobParams);
         const response = await mediaConvertClient.send(command);
+
+        console.log('MediaConvert job created successfully!');
+        console.log('Job ID:', response.Job.Id);
+        console.log('Job Status:', response.Job.Status);
 
         res.json({
             success: true,
@@ -488,7 +500,10 @@ app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req
             outputFilename
         });
     } catch (error) {
-        console.error('Error creating MediaConvert job:', error);
+        console.error('=== ERROR CREATING MEDIACONVERT JOB ===');
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Full error:', JSON.stringify(error, null, 2));
         res.status(500).json({ success: false, error: error.message });
     }
 });
