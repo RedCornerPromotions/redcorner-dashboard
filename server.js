@@ -252,20 +252,35 @@ function formatDate(date) {
 }
 
 // Generate download filename
-function generateDownloadFilename(channel, originalKey, settings) {
-    const prefix = settings[`channel${channel}`] || `Channel_${channel}_PGM`;
-    const date = new Date();
+function generateDownloadFilename(channel, originalKey, settings, fileDate) {
+    const prefix = settings[`channel${channel}`] || `Ch${channel}`;
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
+
+    // Extract filename from full S3 key
+    const filename = originalKey.split('/').pop();
+
+    // Determine recording type (program, preview, or stream)
+    let type = 'Recording';
+    if (filename.startsWith('program_') || filename.startsWith('program.')) {
+        type = 'Program';
+    } else if (filename.startsWith('preview_') || filename.startsWith('preview.')) {
+        type = 'Preview';
+    } else if (filename.startsWith('stream_') || filename.startsWith('stream.')) {
+        type = 'Stream';
+    }
+
+    // Use the file's actual date, not today's date
+    const date = fileDate || new Date();
     const day = days[date.getDay()];
     const month = months[date.getMonth()];
     const dateNum = date.getDate();
-    
+    const year = date.getFullYear();
+
     // Get file extension from original
     const ext = originalKey.split('.').pop();
-    
-    return `${prefix}_${day}_${month}_${dateNum}.${ext}`;
+
+    return `${prefix}_${type}_${day}_${month}_${dateNum}_${year}.${ext}`;
 }
 
 // List recordings
@@ -292,13 +307,18 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
                     const files = response.Contents
                         .filter(item => item.Key.endsWith('.m3u8')) // Only show .m3u8 playlist files
                         .filter(item => item.Size > 100) // Filter out empty/corrupt files
+                        .filter(item => {
+                            // Only show program recordings, not preview or stream
+                            const filename = item.Key.split('/').pop();
+                            return filename.startsWith('program');
+                        })
                         .map(item => ({
                             key: item.Key,
                             size: item.Size,
                             sizeFormatted: formatFileSize(item.Size),
                             date: item.LastModified,
                             dateFormatted: formatDate(new Date(item.LastModified)),
-                            displayName: generateDownloadFilename(channel, item.Key, settings)
+                            displayName: generateDownloadFilename(channel, item.Key, settings, new Date(item.LastModified))
                         }))
                         .sort((a, b) => b.date - a.date); // Newest first
 
