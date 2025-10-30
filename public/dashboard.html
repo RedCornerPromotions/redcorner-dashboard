@@ -184,7 +184,7 @@
 
                 if (data.success && data.url) {
                     previewDiv.innerHTML = `
-                        <img src="${data.url}" style="max-width: 100%; border-radius: 4px;" alt="Holding Slide">
+                        <img src="${data.url}" style="max-width: 320px; max-height: 180px; border-radius: 4px; display: block; margin: 0 auto;" alt="Holding Slide">
                         <p style="color: #10b981; text-align: center; margin-top: 10px; font-size: 12px;">✓ Active</p>
                     `;
                     s3PathSpan.textContent = data.s3Path;
