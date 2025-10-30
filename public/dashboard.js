@@ -59,13 +59,13 @@ function createChannelCards() {
 
                 <div class="collapsible-section" style="margin-top: 15px; background: #1a1a2e; border-radius: 8px;">
                     <div onclick="toggleDestinations(${i})" style="padding: 12px 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333;">
-                        <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">Stream Destination</h4>
-                        <span id="dest-toggle-${i}" style="color: #e74c3c; font-size: 18px;">▶</span>
+                        <h4 style="color: #60a5fa; margin: 0; font-size: 16px;">Stream Destination</h4>
+                        <span id="dest-toggle-${i}" style="color: #60a5fa; font-size: 18px;">▶</span>
                     </div>
 
                     <div id="dest-content-${i}" style="padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;">
                         <div style="padding: 15px 0;">
-                            <p class="destination-help">⚠ Configure destination BEFORE starting channel. Channel must be IDLE to change.</p>
+                            <p class="destination-help">NOTE: Configure destination BEFORE starting channel. Channel must be IDLE to change.</p>
 
                             <div id="dest-status-${i}" class="destination-status">
                                 <div class="destination-idle">
@@ -110,8 +110,8 @@ function createChannelCards() {
 
                 <div class="collapsible-section" style="margin-top: 15px; background: #1a1a2e; border-radius: 8px;">
                     <div onclick="toggleOverlay(${i})" style="padding: 12px 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333;">
-                        <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">HTML5 Overlay (Live Switching)</h4>
-                        <span id="overlay-toggle-${i}" style="color: #e74c3c; font-size: 18px;">▶</span>
+                        <h4 style="color: #60a5fa; margin: 0; font-size: 16px;">HTML5 Overlay (Live Switching)</h4>
+                        <span id="overlay-toggle-${i}" style="color: #60a5fa; font-size: 18px;">▶</span>
                     </div>
 
                     <div id="overlay-content-${i}" style="padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;">
