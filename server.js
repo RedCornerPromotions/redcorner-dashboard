@@ -173,8 +173,6 @@ app.delete('/api/channel/:num/destination', requireAuth, async (req, res) => {
     res.json(result);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-
 // ==========================================
 // RECORDINGS API ENDPOINTS
 // ==========================================
@@ -657,3 +655,4 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`Region: ${process.env.AWS_REGION}`);
     console.log('==========================================');
 });
+
