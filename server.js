@@ -437,7 +437,12 @@ app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req
             Settings: {
                 Inputs: [{
                     FileInput: `s3://${S3_BUCKET}/${decodedKey}`,
-                    TimecodeSource: 'ZEROBASED'
+                    TimecodeSource: 'ZEROBASED',
+                    AudioSelectors: {
+                        'Audio Selector 1': {
+                            DefaultSelection: 'DEFAULT'
+                        }
+                    }
                 }],
                 OutputGroups: [{
                     Name: 'File Group',
@@ -466,6 +471,7 @@ app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req
                             }
                         },
                         AudioDescriptions: [{
+                            AudioSourceName: 'Audio Selector 1',
                             CodecSettings: {
                                 Codec: 'AAC',
                                 AacSettings: {
