@@ -450,8 +450,10 @@ app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req
                                 H265Settings: {
                                     RateControlMode: 'QVBR',
                                     QualityTuningLevel: 'SINGLE_PASS_HQ',
-                                    Bitrate: 5000000,
-                                    MaxBitrate: 8000000
+                                    MaxBitrate: 8000000,
+                                    QvbrSettings: {
+                                        QvbrQualityLevel: 8
+                                    }
                                 }
                             }
                         },
@@ -461,6 +463,7 @@ app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req
                                 AacSettings: {
                                     Bitrate: 128000,
                                     CodecProfile: 'LC',
+                                    CodingMode: 'CODING_MODE_2_0',
                                     SampleRate: 48000
                                 }
                             }
