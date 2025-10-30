@@ -635,13 +635,21 @@
                 const controlSection = document.getElementById('recording-control-section');
                 const statusDiv = document.getElementById('recording-status');
 
-                // Only show recording control when channel is RUNNING
+                // Show recording control when channel is active (not IDLE or ERROR)
                 if (data.state === 'RUNNING') {
                     controlSection.style.display = 'block';
                     statusDiv.innerHTML = '● Recording in progress...';
                     statusDiv.style.color = '#10b981';
+                } else if (data.state === 'STARTING') {
+                    controlSection.style.display = 'block';
+                    statusDiv.innerHTML = '⏳ Channel starting...';
+                    statusDiv.style.color = '#f59e0b';
+                } else if (data.state === 'STOPPING') {
+                    controlSection.style.display = 'block';
+                    statusDiv.innerHTML = '⏳ Finalizing recording...';
+                    statusDiv.style.color = '#f59e0b';
                 } else {
-                    // Hide the entire recording control section when not recording
+                    // Hide when channel is IDLE, ERROR, or other inactive states
                     controlSection.style.display = 'none';
                 }
             } catch (error) {
