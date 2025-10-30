@@ -416,6 +416,10 @@ app.post('/api/recordings/convert/:channel/:fileKey(*)', requireAuth, async (req
         const { channel, fileKey } = req.params;
         const decodedKey = decodeURIComponent(fileKey);
 
+        console.log('=== CONVERSION REQUEST RECEIVED ===');
+        console.log('Channel:', channel);
+        console.log('File Key:', decodedKey);
+
         // Get the settings for custom filename
         const settings = loadRecordingSettings();
         const outputFilename = generateDownloadFilename(channel, decodedKey, settings).replace('.ts', '.mp4');
