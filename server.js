@@ -425,6 +425,8 @@ app.get('/api/downloads', requireAuth, async (req, res) => {
             }
 
             if (allFiles.length > 0) {
+                const settings = loadRecordingSettings();
+
                 const files = allFiles.map(item => {
                     try {
                         // Determine if it's quick or HEVC based on filename
@@ -437,7 +439,7 @@ app.get('/api/downloads', requireAuth, async (req, res) => {
                             sizeFormatted: formatFileSize(item.Size),
                             date: item.LastModified,
                             dateFormatted: formatDate(new Date(item.LastModified)),
-                            displayName: item.Key.split('/').pop(), // Just the filename
+                            displayName: generateDownloadFilename(channel, item.Key, settings, new Date(item.LastModified)),
                             type: type
                         };
                     } catch (err) {
