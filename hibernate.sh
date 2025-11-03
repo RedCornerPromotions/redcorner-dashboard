@@ -23,9 +23,6 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-# Load environment
-source .env
-
 echo "📋 Pre-hibernation checklist:"
 echo ""
 echo "   ⚠️  WARNING: This will:"
@@ -179,7 +176,6 @@ echo ""
 cat .env > hibernation-backup.txt
 echo "" >> hibernation-backup.txt
 echo "# Hibernated on: $(date)" >> hibernation-backup.txt
-echo "# S3 Bucket: $S3_BUCKET" >> hibernation-backup.txt
 
 echo "✅ Hibernation complete! System is now in deep sleep."
 echo ""
