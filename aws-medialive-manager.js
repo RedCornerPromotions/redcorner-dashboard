@@ -38,19 +38,19 @@ class AWSMediaLiveManager {
         this.mediaConnectFlows = {};
 
         // Real AWS pricing (Sydney region) based on actual bill
+        // User has 3 output groups: preview (HLS), program (HLS), program-recording (Archive)
         this.pricing = {
             medialive: {
                 input: 0.5832,           // HD HEVC input 10-20mbps
                 motionGraphics: 1.417,   // Overlay feature
                 outputs: {
-                    previewHLS: 0.8748,   // HD AVC <10mbps (preview)
-                    programHLS: 0.8748,   // HD AVC <10mbps (program)
-                    archivePreview: 3.4992, // HD HEVC (high quality archive)
-                    archiveProgram: 2.6244  // HD AVC Enhanced VQ (archive with overlay)
+                    previewHLS: 0.8748,   // HD AVC <10mbps (preview HLS)
+                    programHLS: 0.8748,   // HD AVC <10mbps (program HLS)
+                    programRecording: 2.6244  // HD AVC Enhanced VQ (program-recording Archive)
                 },
                 idle: {
                     input: 0.01,
-                    output: 0.01  // per output, we have 4 outputs
+                    output: 0.01  // per output, we have 3 outputs
                 }
             },
             mediaconnect: {
@@ -58,18 +58,18 @@ class AWSMediaLiveManager {
             }
         };
 
-        // Calculate total per channel running (with average overlay usage 50%)
+        // Calculate total per channel running
+        // Motion graphics at 50% usage (not always active)
         this.costPerChannelHour =
             this.pricing.medialive.input +
             this.pricing.medialive.outputs.previewHLS +
             this.pricing.medialive.outputs.programHLS +
-            this.pricing.medialive.outputs.archivePreview +
-            this.pricing.medialive.outputs.archiveProgram +
+            this.pricing.medialive.outputs.programRecording +
             (this.pricing.medialive.motionGraphics * 0.5);  // 50% of time with overlay
 
         this.costPerChannelIdle =
             this.pricing.medialive.idle.input +
-            (this.pricing.medialive.idle.output * 4);  // 4 output groups
+            (this.pricing.medialive.idle.output * 3);  // 3 output groups
 
         console.log('[AWS MediaLive Manager] Initialized with MediaConnect support');
         const configured = Object.values(this.channelMap).filter(id => id).length;
