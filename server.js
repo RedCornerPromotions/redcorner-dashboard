@@ -169,6 +169,39 @@ app.get('/api/channels/status', requireAuth, async (req, res) => {
     res.json({ channels: statuses });
 });
 
+// Cost status check (for popup)
+app.get('/api/cost-status', requireAuth, async (req, res) => {
+    const channels = [];
+    let runningCount = 0;
+    let idleCount = 0;
+
+    for (let i = 1; i <= 5; i++) {
+        const status = await awsManager.getChannelStatus(i);
+        channels.push(status);
+        if (status.state === 'RUNNING') runningCount++;
+        if (status.state === 'IDLE') idleCount++;
+    }
+
+    const flowsResult = await awsManager.listAllFlows();
+    const flows = flowsResult.flows || [];
+
+    const hourlyCost = (runningCount * 115) + (flows.length * 0.045) + (idleCount * 0.02);
+
+    res.json({
+        channels,
+        flows,
+        summary: {
+            runningChannels: runningCount,
+            idleChannels: idleCount,
+            activeFlows: flows.length,
+            hourlyCost: hourlyCost.toFixed(2),
+            dailyCost: (hourlyCost * 24).toFixed(2),
+            weeklyCost: (hourlyCost * 24 * 7).toFixed(2),
+            monthlyCost: (hourlyCost * 24 * 30).toFixed(2)
+        }
+    });
+});
+
 app.get('/api/costs', requireAuth, async (req, res) => {
     const costs = await awsManager.getEstimatedCost();
     res.json(costs);

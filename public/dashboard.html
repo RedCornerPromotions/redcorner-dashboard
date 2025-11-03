@@ -61,6 +61,7 @@
             <div class="header-center">
                 <button class="multiview-btn" onclick="window.open('/multiview.html', 'multiview', 'width=1920,height=1080')">OPEN MULTIVIEW</button>
                 <button class="multiview-btn" onclick="window.open('/recordings.html', 'recordings', 'width=1200,height=800')" style="margin-left: 10px;">RECORDINGS & DOWNLOADS</button>
+                <button class="multiview-btn" onclick="showCostStatus()" style="margin-left: 10px; background: #059669;">💰 COST CHECK</button>
             </div>
             <button id="logoutBtn">Logout</button>
         </header>
@@ -153,6 +154,23 @@
 
         <div class="channels-grid">
             <!-- Channel cards will be dynamically created here -->
+        </div>
+    </div>
+
+    <!-- Cost Status Modal -->
+    <div id="costModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="background: #1a1a2e; padding: 30px; border-radius: 12px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; border: 2px solid #3b82f6;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: #60a5fa; margin: 0;">💰 AWS Cost Status</h2>
+                <button onclick="closeCostModal()" style="background: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600;">✕ Close</button>
+            </div>
+
+            <div id="costModalContent" style="color: #e5e7eb;">
+                <div style="text-align: center; padding: 40px;">
+                    <div style="font-size: 40px;">⏳</div>
+                    <p>Loading cost data...</p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -313,6 +331,116 @@
         // Check for flows on page load and every 30 seconds
         checkForActiveFlows();
         setInterval(checkForActiveFlows, 30000);
+
+        // Cost Status Modal
+        async function showCostStatus() {
+            const modal = document.getElementById('costModal');
+            modal.style.display = 'flex';
+
+            try {
+                const response = await fetch('/api/cost-status', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
+                let html = '';
+
+                // Summary
+                html += '<div style="background: #2d2d44; padding: 20px; border-radius: 8px; margin-bottom: 20px;">';
+                html += '<h3 style="color: #fbbf24; margin: 0 0 15px 0;">📊 Current Burn Rate</h3>';
+                html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
+                html += `<div><span style="color: #9ca3af;">Per Hour:</span> <strong style="color: #10b981; font-size: 18px;">$${data.summary.hourlyCost}</strong></div>`;
+                html += `<div><span style="color: #9ca3af;">Per Day:</span> <strong style="color: #10b981; font-size: 18px;">$${data.summary.dailyCost}</strong></div>`;
+                html += `<div><span style="color: #9ca3af;">Per Week:</span> <strong style="color: #10b981; font-size: 18px;">$${data.summary.weeklyCost}</strong></div>`;
+                html += `<div><span style="color: #9ca3af;">Per Month:</span> <strong style="color: #10b981; font-size: 18px;">$${data.summary.monthlyCost}</strong></div>`;
+                html += '</div></div>';
+
+                // Channels
+                html += '<div style="background: #2d2d44; padding: 20px; border-radius: 8px; margin-bottom: 20px;">';
+                html += '<h3 style="color: #60a5fa; margin: 0 0 15px 0;">📺 MediaLive Channels</h3>';
+
+                const runningChannels = data.channels.filter(c => c.state === 'RUNNING');
+                const idleChannels = data.channels.filter(c => c.state === 'IDLE');
+
+                if (runningChannels.length > 0) {
+                    html += '<div style="margin-bottom: 15px;">';
+                    html += '<strong style="color: #ef4444;">🔴 RUNNING:</strong> <span style="color: #fbbf24;">$115/hour each</span><br>';
+                    runningChannels.forEach(ch => {
+                        html += `<div style="margin: 5px 0 5px 20px;">• Channel ${ch.channelNumber}: ${ch.name || 'Unnamed'}</div>`;
+                    });
+                    html += '</div>';
+                }
+
+                if (idleChannels.length > 0) {
+                    html += '<div>';
+                    html += '<strong style="color: #9ca3af;">⚪ IDLE:</strong> <span style="color: #9ca3af;">$0.02/hour each</span><br>';
+                    idleChannels.forEach(ch => {
+                        html += `<div style="margin: 5px 0 5px 20px; color: #9ca3af;">• Channel ${ch.channelNumber}: ${ch.name || 'Unnamed'}</div>`;
+                    });
+                    html += '</div>';
+                }
+
+                if (runningChannels.length === 0 && idleChannels.length === 0) {
+                    html += '<div style="color: #9ca3af;">No channels configured</div>';
+                }
+
+                html += '</div>';
+
+                // MediaConnect Flows
+                html += '<div style="background: #2d2d44; padding: 20px; border-radius: 8px;">';
+                html += '<h3 style="color: #60a5fa; margin: 0 0 15px 0;">🌐 MediaConnect Flows</h3>';
+
+                if (data.flows.length > 0) {
+                    html += `<div style="color: #ef4444; font-weight: 600; margin-bottom: 10px;">⚠️ ${data.flows.length} ACTIVE FLOW(S) - $${(data.flows.length * 0.045).toFixed(2)}/hour</div>`;
+                    data.flows.forEach(flow => {
+                        html += `<div style="margin: 5px 0 5px 20px;">• ${flow.name} (${flow.status})</div>`;
+                    });
+                    html += '<div style="margin-top: 15px; padding: 10px; background: #991b1b; border-radius: 4px; font-size: 13px;">';
+                    html += '⚠️ These flows should auto-delete when channels stop! If you see this, there may be a bug or they were left over from before the fix.';
+                    html += '</div>';
+                } else {
+                    html += '<div style="color: #10b981;">✅ No active flows - not being billed</div>';
+                }
+
+                html += '</div>';
+
+                // Status indicator
+                if (data.summary.runningChannels > 0) {
+                    html += '<div style="margin-top: 20px; padding: 15px; background: #dc2626; border-radius: 8px; text-align: center; font-weight: 600;">';
+                    html += `⚠️ ${data.summary.runningChannels} channel(s) RUNNING - Stop them when not streaming!`;
+                    html += '</div>';
+                } else if (data.flows.length > 0) {
+                    html += '<div style="margin-top: 20px; padding: 15px; background: #f59e0b; color: #000; border-radius: 8px; text-align: center; font-weight: 600;">';
+                    html += `⚠️ ${data.flows.length} flow(s) active - Delete from main dashboard`;
+                    html += '</div>';
+                } else {
+                    html += '<div style="margin-top: 20px; padding: 15px; background: #059669; border-radius: 8px; text-align: center; font-weight: 600;">';
+                    html += '✅ All good! No channels running, no active flows.';
+                    html += '</div>';
+                }
+
+                document.getElementById('costModalContent').innerHTML = html;
+
+            } catch (error) {
+                document.getElementById('costModalContent').innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #ef4444;">
+                        <div style="font-size: 40px;">❌</div>
+                        <p>Error loading cost data: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function closeCostModal() {
+            document.getElementById('costModal').style.display = 'none';
+        }
+
+        // Close modal on background click
+        document.getElementById('costModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeCostModal();
+            }
+        });
     </script>
 </body>
 </html>
