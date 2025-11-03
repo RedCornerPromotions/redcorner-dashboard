@@ -364,7 +364,7 @@
 
                 if (runningChannels.length > 0) {
                     html += '<div style="margin-bottom: 15px;">';
-                    html += '<strong style="color: #ef4444;">🔴 RUNNING:</strong> <span style="color: #fbbf24;">$115/hour each</span><br>';
+                    html += `<strong style="color: #ef4444;">🔴 RUNNING:</strong> <span style="color: #fbbf24;">$${data.summary.perChannelRunning}/hour each</span><br>`;
                     runningChannels.forEach(ch => {
                         html += `<div style="margin: 5px 0 5px 20px;">• Channel ${ch.channelNumber}: ${ch.name || 'Unnamed'}</div>`;
                     });
@@ -373,7 +373,7 @@
 
                 if (idleChannels.length > 0) {
                     html += '<div>';
-                    html += '<strong style="color: #9ca3af;">⚪ IDLE:</strong> <span style="color: #9ca3af;">$0.02/hour each</span><br>';
+                    html += `<strong style="color: #9ca3af;">⚪ IDLE:</strong> <span style="color: #9ca3af;">$${data.summary.perChannelIdle}/hour each</span><br>`;
                     idleChannels.forEach(ch => {
                         html += `<div style="margin: 5px 0 5px 20px; color: #9ca3af;">• Channel ${ch.channelNumber}: ${ch.name || 'Unnamed'}</div>`;
                     });

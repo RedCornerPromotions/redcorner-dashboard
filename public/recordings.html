@@ -361,64 +361,54 @@
 
         async function loadDownloads() {
             try {
-                const response = await fetch('/api/recordings', { credentials: 'include' });
+                const response = await fetch('/api/downloads', { credentials: 'include' });
                 const data = await response.json();
 
                 const container = document.getElementById('downloads-container');
 
-                if (!data.success || data.recordings.length === 0) {
-                    container.innerHTML = '<div class="empty-state">No downloads found</div>';
+                if (!data.success || data.downloads.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No downloads found. Convert a recording to MP4 first.</div>';
                     return;
                 }
 
                 let html = '';
-                let hasDownloads = false;
 
-                data.recordings.forEach(channel => {
-                    // Filter for .mp4 files only in Downloads tab
-                    const mp4Files = channel.files.filter(file => file.key.endsWith('.mp4'));
+                data.downloads.forEach(channel => {
+                    html += `
+                        <div class="channel-section">
+                            <h3>Channel ${channel.channel}</h3>
+                            <div class="recordings-list">
+                    `;
 
-                    if (mp4Files.length > 0) {
-                        hasDownloads = true;
+                    channel.files.forEach(file => {
+                        const conversionId = `download-${channel.channel}-${file.key.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                        const typeColor = file.type === 'Quick H.264' ? '#10b981' : '#8b5cf6';
+
                         html += `
-                            <div class="channel-section">
-                                <h3>Channel ${channel.channel}</h3>
-                                <div class="recordings-list">
-                        `;
-
-                        mp4Files.forEach(file => {
-                            const conversionId = `download-${channel.channel}-${file.key.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-                            html += `
-                                <div class="recording-item" id="${conversionId}">
-                                    <div class="recording-info">
-                                        <h4>${file.displayName} <span style="color: #8b5cf6;">[MP4 HEVC]</span></h4>
-                                        <p>Size: ${file.sizeFormatted} - Modified: ${file.dateFormatted}</p>
-                                    </div>
-                                    <div class="recording-actions">
-                                        <button class="btn btn-download" onclick="downloadRecording(${channel.channel}, '${file.key}', '${file.displayName}')">
-                                            Download
-                                        </button>
-                                        <button class="btn btn-delete" onclick="deleteRecording(${channel.channel}, '${file.key}', '${conversionId}')">
-                                            Delete
-                                        </button>
-                                    </div>
+                            <div class="recording-item" id="${conversionId}">
+                                <div class="recording-info">
+                                    <h4>${file.displayName} <span style="color: ${typeColor};">[${file.type}]</span></h4>
+                                    <p>Size: ${file.sizeFormatted} - Modified: ${file.dateFormatted}</p>
                                 </div>
-                            `;
-                        });
-
-                        html += `
+                                <div class="recording-actions">
+                                    <button class="btn btn-download" onclick="downloadRecording(${channel.channel}, '${file.key}', '${file.displayName}')">
+                                        Download
+                                    </button>
+                                    <button class="btn btn-delete" onclick="deleteRecording(${channel.channel}, '${file.key}', '${conversionId}')">
+                                        Delete
+                                    </button>
                                 </div>
                             </div>
                         `;
-                    }
+                    });
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
                 });
 
-                if (!hasDownloads) {
-                    container.innerHTML = '<div class="empty-state">No downloads found. Convert a recording to MP4 first.</div>';
-                } else {
-                    container.innerHTML = html;
-                }
+                container.innerHTML = html;
 
             } catch (error) {
                 document.getElementById('downloads-container').innerHTML =

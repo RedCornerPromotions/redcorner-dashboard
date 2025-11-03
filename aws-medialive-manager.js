@@ -37,7 +37,39 @@ class AWSMediaLiveManager {
 
         this.mediaConnectFlows = {};
 
-        this.costPerChannelHour = 2.0;
+        // Real AWS pricing (Sydney region) based on actual bill
+        this.pricing = {
+            medialive: {
+                input: 0.5832,           // HD HEVC input 10-20mbps
+                motionGraphics: 1.417,   // Overlay feature
+                outputs: {
+                    previewHLS: 0.8748,   // HD AVC <10mbps (preview)
+                    programHLS: 0.8748,   // HD AVC <10mbps (program)
+                    archivePreview: 3.4992, // HD HEVC (high quality archive)
+                    archiveProgram: 2.6244  // HD AVC Enhanced VQ (archive with overlay)
+                },
+                idle: {
+                    input: 0.01,
+                    output: 0.01  // per output, we have 4 outputs
+                }
+            },
+            mediaconnect: {
+                flow: 0.045  // per hour per flow
+            }
+        };
+
+        // Calculate total per channel running (with average overlay usage 50%)
+        this.costPerChannelHour =
+            this.pricing.medialive.input +
+            this.pricing.medialive.outputs.previewHLS +
+            this.pricing.medialive.outputs.programHLS +
+            this.pricing.medialive.outputs.archivePreview +
+            this.pricing.medialive.outputs.archiveProgram +
+            (this.pricing.medialive.motionGraphics * 0.5);  // 50% of time with overlay
+
+        this.costPerChannelIdle =
+            this.pricing.medialive.idle.input +
+            (this.pricing.medialive.idle.output * 4);  // 4 output groups
 
         console.log('[AWS MediaLive Manager] Initialized with MediaConnect support');
         const configured = Object.values(this.channelMap).filter(id => id).length;
@@ -181,15 +213,33 @@ class AWSMediaLiveManager {
 
     async getEstimatedCost() {
         let runningCount = 0;
+        let idleCount = 0;
         for (let i = 1; i <= 5; i++) {
             const status = await this.getChannelStatus(i);
             if (status.state === 'RUNNING') runningCount++;
+            if (status.state === 'IDLE') idleCount++;
         }
+
+        const hourlyCost = (runningCount * this.costPerChannelHour) + (idleCount * this.costPerChannelIdle);
+
         return {
             runningChannels: runningCount,
-            costPerHour: runningCount * this.costPerChannelHour,
-            costPerDay: runningCount * this.costPerChannelHour * 24,
-            costPerWeek: runningCount * this.costPerChannelHour * 24 * 7
+            idleChannels: idleCount,
+            costPerHour: hourlyCost,
+            costPerDay: hourlyCost * 24,
+            costPerWeek: hourlyCost * 24 * 7,
+            breakdown: {
+                running: {
+                    count: runningCount,
+                    perChannelHour: this.costPerChannelHour,
+                    total: runningCount * this.costPerChannelHour
+                },
+                idle: {
+                    count: idleCount,
+                    perChannelHour: this.costPerChannelIdle,
+                    total: idleCount * this.costPerChannelIdle
+                }
+            }
         };
     }
 
