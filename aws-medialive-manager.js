@@ -1,5 +1,5 @@
 const { MediaLiveClient, StartChannelCommand, StopChannelCommand, DescribeChannelCommand, UpdateChannelCommand, BatchUpdateScheduleCommand } = require("@aws-sdk/client-medialive");
-const { MediaConnectClient, CreateFlowCommand, DeleteFlowCommand, AddFlowOutputsCommand, DescribeFlowCommand } = require("@aws-sdk/client-mediaconnect");
+const { MediaConnectClient, CreateFlowCommand, DeleteFlowCommand, AddFlowOutputsCommand, DescribeFlowCommand, ListFlowsCommand } = require("@aws-sdk/client-mediaconnect");
 
 class AWSMediaLiveManager {
     constructor() {
@@ -69,6 +69,22 @@ class AWSMediaLiveManager {
             const command = new StopChannelCommand({ ChannelId: channelId });
             await this.client.send(command);
             console.log(`[AWS] Stopped channel ${channelNumber} (${channelId})`);
+
+            // CRITICAL: Delete MediaConnect flow to stop billing
+            if (this.mediaConnectFlows[channelNumber]) {
+                console.log(`[MediaConnect] Deleting flow for stopped channel ${channelNumber} to prevent billing...`);
+                try {
+                    await this.mediaConnectClient.send(new DeleteFlowCommand({
+                        FlowArn: this.mediaConnectFlows[channelNumber]
+                    }));
+                    console.log(`[MediaConnect] Flow deleted successfully - billing stopped`);
+                    delete this.mediaConnectFlows[channelNumber];
+                } catch (flowError) {
+                    console.error(`[MediaConnect] ERROR deleting flow (WILL CONTINUE BILLING):`, flowError.message);
+                    // Return warning but don't fail the stop operation
+                }
+            }
+
             return { success: true, channelNumber, channelId, state: 'STOPPING' };
         } catch (error) {
             console.error(`[AWS] Error stopping channel ${channelNumber}:`, error.message);
@@ -587,6 +603,79 @@ class AWSMediaLiveManager {
         } catch (error) {
             console.error('[AWS] Error:', error);
             return { success: false, message: error.message };
+        }
+    }
+
+    async listAllFlows() {
+        try {
+            const command = new ListFlowsCommand({});
+            const response = await this.mediaConnectClient.send(command);
+
+            const flows = response.Flows || [];
+            console.log(`[MediaConnect] Found ${flows.length} flows`);
+
+            return {
+                success: true,
+                flows: flows.map(flow => ({
+                    name: flow.Name,
+                    arn: flow.FlowArn,
+                    status: flow.Status,
+                    description: flow.Description
+                }))
+            };
+        } catch (error) {
+            console.error('[MediaConnect] Error listing flows:', error.message);
+            return {
+                success: false,
+                error: error.message,
+                flows: []
+            };
+        }
+    }
+
+    async deleteAllFlows() {
+        try {
+            const listResult = await this.listAllFlows();
+            if (!listResult.success || listResult.flows.length === 0) {
+                return {
+                    success: true,
+                    message: 'No flows to delete',
+                    deletedCount: 0
+                };
+            }
+
+            const deletedFlows = [];
+            const errors = [];
+
+            for (const flow of listResult.flows) {
+                try {
+                    console.log(`[MediaConnect] Deleting flow: ${flow.name} (${flow.status})`);
+                    await this.mediaConnectClient.send(new DeleteFlowCommand({
+                        FlowArn: flow.arn
+                    }));
+                    deletedFlows.push(flow.name);
+                } catch (error) {
+                    console.error(`[MediaConnect] Error deleting flow ${flow.name}:`, error.message);
+                    errors.push({ flow: flow.name, error: error.message });
+                }
+            }
+
+            // Clear internal tracking
+            this.mediaConnectFlows = {};
+
+            return {
+                success: true,
+                deletedCount: deletedFlows.length,
+                deletedFlows,
+                errors: errors.length > 0 ? errors : undefined
+            };
+        } catch (error) {
+            console.error('[MediaConnect] Error in deleteAllFlows:', error.message);
+            return {
+                success: false,
+                error: error.message,
+                deletedCount: 0
+            };
         }
     }
 }

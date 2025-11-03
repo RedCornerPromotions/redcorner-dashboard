@@ -149,6 +149,18 @@ app.post('/api/channel/:num/destination/remove', requireAuth, async (req, res) =
     res.json(result);
 });
 
+// MediaConnect flow management
+app.get('/api/flows', requireAuth, async (req, res) => {
+    const result = await awsManager.listAllFlows();
+    res.json(result);
+});
+
+app.post('/api/flows/delete-all', requireAuth, async (req, res) => {
+    console.log('[API] EMERGENCY: Deleting all MediaConnect flows');
+    const result = await awsManager.deleteAllFlows();
+    res.json(result);
+});
+
 app.get('/api/channels/status', requireAuth, async (req, res) => {
     const statuses = [];
     for (let i = 1; i <= 5; i++) {
