@@ -491,15 +491,17 @@ app.get('/api/recordings/download/:channel/:fileKey(*)', requireAuth, async (req
     try {
         const { channel, fileKey } = req.params;
         const displayName = req.query.name || fileKey;
-        
+
         const command = new GetObjectCommand({
             Bucket: S3_BUCKET,
-            Key: decodeURIComponent(fileKey)
+            Key: decodeURIComponent(fileKey),
+            ResponseContentDisposition: `attachment; filename="${displayName}"`,
+            ResponseContentType: 'application/octet-stream'
         });
-        
+
         const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-        
-        // Redirect to signed URL with custom filename
+
+        // Redirect to signed URL - S3 will force download with custom filename
         res.redirect(url);
     } catch (error) {
         console.error('Error downloading recording:', error);
