@@ -387,64 +387,72 @@ app.get('/api/recordings', requireAuth, async (req, res) => {
 });
 
 // List converted downloads (MP4 files)
+// MediaConvert saves to recordings/channel{N}/program/ folder (same as .ts files)
 app.get('/api/downloads', requireAuth, async (req, res) => {
     try {
         const downloads = [];
 
         for (let channel = 1; channel <= 5; channel++) {
-            const prefix = `downloads/channel${channel}/`;
-            console.log(`Searching downloads path: ${prefix} in bucket: ${S3_BUCKET}`);
+            // Check both possible locations for MP4 files
+            const locations = [
+                `recordings/channel${channel}/program/`,  // Where MediaConvert actually saves
+                `downloads/channel${channel}/`             // Legacy/alternative location
+            ];
 
-            const command = new ListObjectsV2Command({
-                Bucket: S3_BUCKET,
-                Prefix: prefix
-            });
+            const allFiles = [];
 
-            try {
-                const response = await s3Client.send(command);
-                console.log(`Channel ${channel} - Downloads: ${response.Contents ? response.Contents.length : 0} files`);
+            for (const prefix of locations) {
+                console.log(`Searching: ${prefix} in bucket: ${S3_BUCKET}`);
 
-                if (response.Contents && response.Contents.length > 0) {
-                    const settings = loadRecordingSettings();
+                const command = new ListObjectsV2Command({
+                    Bucket: S3_BUCKET,
+                    Prefix: prefix
+                });
 
-                    const mp4Files = response.Contents.filter(item =>
-                        item.Key.endsWith('.mp4') && item.Size > 1000000 // Only MP4 files > 1MB
-                    );
-                    console.log(`Ch${channel}: ${mp4Files.length} .mp4 files found in downloads`);
+                try {
+                    const response = await s3Client.send(command);
 
-                    const files = mp4Files.map(item => {
-                        try {
-                            // Determine if it's quick or HEVC based on filename
-                            const isQuick = item.Key.includes('_quick');
-                            const type = isQuick ? 'Quick H.264' : 'HEVC';
-
-                            return {
-                                key: item.Key,
-                                size: item.Size,
-                                sizeFormatted: formatFileSize(item.Size),
-                                date: item.LastModified,
-                                dateFormatted: formatDate(new Date(item.LastModified)),
-                                displayName: item.Key.split('/').pop(), // Just the filename
-                                type: type
-                            };
-                        } catch (err) {
-                            console.error(`Error mapping download ${item.Key}:`, err);
-                            return null;
-                        }
-                    }).filter(item => item !== null)
-                      .sort((a, b) => b.date - a.date);
-
-                    console.log(`Ch${channel}: ${files.length} download files after mapping`);
-
-                    if (files.length > 0) {
-                        downloads.push({
-                            channel,
-                            files
-                        });
+                    if (response.Contents && response.Contents.length > 0) {
+                        const mp4Files = response.Contents.filter(item =>
+                            item.Key.endsWith('.mp4') && item.Size > 1000000 // Only MP4 files > 1MB
+                        );
+                        allFiles.push(...mp4Files);
+                        console.log(`Ch${channel}: ${mp4Files.length} .mp4 files in ${prefix}`);
                     }
+                } catch (err) {
+                    console.error(`Error checking ${prefix}:`, err.message);
                 }
-            } catch (err) {
-                console.error(`Error listing downloads for channel ${channel}:`, err);
+            }
+
+            if (allFiles.length > 0) {
+                const files = allFiles.map(item => {
+                    try {
+                        // Determine if it's quick or HEVC based on filename
+                        const isQuick = item.Key.includes('_quick');
+                        const type = isQuick ? 'Quick H.264' : 'HEVC';
+
+                        return {
+                            key: item.Key,
+                            size: item.Size,
+                            sizeFormatted: formatFileSize(item.Size),
+                            date: item.LastModified,
+                            dateFormatted: formatDate(new Date(item.LastModified)),
+                            displayName: item.Key.split('/').pop(), // Just the filename
+                            type: type
+                        };
+                    } catch (err) {
+                        console.error(`Error mapping download ${item.Key}:`, err);
+                        return null;
+                    }
+                }).filter(item => item !== null)
+                  .sort((a, b) => b.date - a.date);
+
+                console.log(`Ch${channel}: ${files.length} total download files`);
+
+                downloads.push({
+                    channel,
+                    files
+                });
             }
         }
 
