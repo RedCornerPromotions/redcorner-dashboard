@@ -175,7 +175,7 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const fieldId = urlParams.get('field') || '1';
-        const storageKey = `rugbyLeagueOverlay_field${fieldId}`;
+        const storageKey = `leagueOverlay_field${fieldId}`;
         document.getElementById('fieldBadge').textContent = `FIELD ${fieldId}`;
         let clockInterval = null;
         let isVisible = true;

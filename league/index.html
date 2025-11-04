@@ -225,7 +225,7 @@
     <script>
         function checkFieldStatus() {
             for (let i = 1; i <= 5; i++) {
-                const data = JSON.parse(localStorage.getItem(`rugbyLeagueOverlay_field${i}`) || '{}');
+                const data = JSON.parse(localStorage.getItem(`leagueOverlay_field${i}`) || '{}');
                 const statusEl = document.getElementById(`status-${i}`);
                 const gameEl = document.getElementById(`game-${i}`);
                 if (data.homeName && data.awayName) {
