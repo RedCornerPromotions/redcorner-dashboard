@@ -313,16 +313,26 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const fieldId = urlParams.get('field') || '1';
-        const position = urlParams.get('position') || 'top-center';
         const homeColor = urlParams.get('homeColor') || '#0066cc'; // Default blue
         const awayColor = urlParams.get('awayColor') || '#cc0000'; // Default red
         const storageKey = `leagueOverlay_field${fieldId}`;
 
         document.getElementById('fieldIndicator').textContent = `F${fieldId}`;
 
-        // Set position
+        // Set position from localStorage or URL parameter
         const scoreboard = document.getElementById('scoreboard');
-        scoreboard.className = `scoreboard ${position}`;
+        let currentPosition = 'top-center';
+
+        function updatePosition() {
+            const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            const newPosition = data.position || urlParams.get('position') || 'top-center';
+            if (newPosition !== currentPosition) {
+                currentPosition = newPosition;
+                scoreboard.className = `scoreboard ${currentPosition}`;
+            }
+        }
+
+        updatePosition();
 
         // Set team colors
         document.getElementById('homeTeam').style.setProperty('--team-color', homeColor);
@@ -353,6 +363,9 @@
 
         function updateOverlay() {
             const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
+
+            // Update position
+            updatePosition();
 
             // Update team names
             if (data.homeName) {

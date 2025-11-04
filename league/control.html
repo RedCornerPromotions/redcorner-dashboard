@@ -56,6 +56,9 @@
         .status-indicator { width: 16px; height: 16px; border-radius: 50%; border: 3px solid #ffffff; }
         .status-indicator.active { background: #4caf50; }
         .status-indicator.inactive { background: #f44336; }
+        .position-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+        .btn-position { background: #673ab7; color: #ffffff; padding: 15px; font-size: 14px; }
+        .btn-position.active { background: #ff6600; border-color: #ff6600; }
         @media (min-width: 768px) {
             .container { padding: 20px; }
             .header { padding: 20px; }
@@ -168,6 +171,17 @@
                     <label style="display: block; font-weight: bold; margin-bottom: 8px;">Info Bar Text</label>
                     <input type="text" id="infoText" placeholder="NRL Round 25..." style="width: 100%; padding: 12px; border: 3px solid #000; border-radius: 6px; font-size: 16px;">
                 </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 8px;">📍 Overlay Position</label>
+                    <div class="position-grid">
+                        <button class="btn btn-position" id="pos-top-left" onclick="setPosition('top-left')">↖ TOP LEFT</button>
+                        <button class="btn btn-position" id="pos-top-center" onclick="setPosition('top-center')">⬆ TOP CENTER</button>
+                        <button class="btn btn-position" id="pos-top-right" onclick="setPosition('top-right')">↗ TOP RIGHT</button>
+                        <button class="btn btn-position" id="pos-bottom-left" onclick="setPosition('bottom-left')">↙ BOTTOM LEFT</button>
+                        <button class="btn btn-position" id="pos-bottom-center" onclick="setPosition('bottom-center')">⬇ BOTTOM CENTER</button>
+                        <button class="btn btn-position" id="pos-bottom-right" onclick="setPosition('bottom-right')">↘ BOTTOM RIGHT</button>
+                    </div>
+                </div>
                 <button class="btn btn-danger" onclick="resetAll()" style="width: 100%; margin-top: 10px;"><span class="btn-icon">❌</span><span>RESET EVERYTHING</span></button>
             </div>
         </div>
@@ -181,6 +195,7 @@
         let isVisible = true;
         let minutes = 40;
         let seconds = 0;
+        let currentPosition = 'top-center';
         function loadData() {
             const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
             document.getElementById('homeName').value = data.homeName || '';
@@ -198,6 +213,8 @@
             updateTimeDisplay();
             isVisible = data.visible !== false;
             updateVisibilityUI();
+            currentPosition = data.position || 'top-center';
+            updatePositionUI(currentPosition);
         }
         function saveData() {
             const data = {
@@ -210,7 +227,8 @@
                 clock: `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`,
                 period: document.getElementById('period').value,
                 infoText: document.getElementById('infoText').value,
-                visible: isVisible
+                visible: isVisible,
+                position: currentPosition
             };
             localStorage.setItem(storageKey, JSON.stringify(data));
             vibrate();
@@ -316,6 +334,25 @@
                 indicator.className = 'status-indicator inactive';
                 statusText.textContent = 'OVERLAY HIDDEN';
             }
+        }
+        function setPosition(position) {
+            currentPosition = position;
+            updatePositionUI(position);
+            saveData();
+            vibrate();
+        }
+        function updatePositionUI(position) {
+            const positions = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'];
+            positions.forEach(pos => {
+                const btn = document.getElementById('pos-' + pos);
+                if (btn) {
+                    if (pos === position) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                }
+            });
         }
         function toggleSection(id) {
             const content = document.getElementById(id + 'Content');
