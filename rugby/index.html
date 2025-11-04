@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rugby League Overlay System - RedCorner</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #ffffff;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 50px; }
+        h1 {
+            color: #ffa726;
+            font-size: 48px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 20px rgba(255, 167, 38, 0.3);
+        }
+        .subtitle { color: rgba(255, 255, 255, 0.8); font-size: 20px; }
+        .fields-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        .field-card {
+            background: rgba(30, 30, 30, 0.8);
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .field-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #ffa726, #ff9800, #ffa726);
+        }
+        .field-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+            border-color: #ffa726;
+        }
+        .field-number {
+            font-size: 72px;
+            font-weight: bold;
+            color: rgba(255, 167, 38, 0.2);
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            line-height: 1;
+        }
+        .field-card h2 {
+            color: #ffa726;
+            font-size: 32px;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+        }
+        .field-status {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .field-status.active {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+            border: 2px solid #4caf50;
+        }
+        .field-status.idle {
+            background: rgba(255, 255, 255, 0.1);
+            color: #888;
+            border: 2px solid #555;
+        }
+        .field-info {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            border-left: 4px solid #ffa726;
+        }
+        .field-info p { margin: 8px 0; font-size: 16px; color: #ffffff; }
+        .field-info strong { color: #ffa726; }
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 25px;
+        }
+        .btn {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            text-align: center;
+            display: inline-block;
+        }
+        .btn-control {
+            background: linear-gradient(135deg, #ffa726, #ff9800);
+            color: #000000;
+        }
+        .btn-control:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 167, 38, 0.4);
+        }
+        .btn-overlay {
+            background: linear-gradient(135deg, #2196f3, #1976d2);
+            color: #ffffff;
+        }
+        .btn-overlay:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(33, 150, 243, 0.4);
+        }
+        .dashboard-link { text-align: center; margin-top: 40px; padding: 20px; }
+        .dashboard-link a {
+            color: #ffa726;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: bold;
+            border: 2px solid #ffa726;
+            padding: 12px 30px;
+            border-radius: 10px;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        .dashboard-link a:hover {
+            background: rgba(255, 167, 38, 0.1);
+            transform: translateY(-2px);
+        }
+        @media (max-width: 768px) {
+            .fields-grid { grid-template-columns: 1fr; }
+            .button-group { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏉 RUGBY LEAGUE OVERLAY SYSTEM</h1>
+            <p class="subtitle">Multi-Field Live Scoring Control</p>
+        </header>
+        <div class="fields-grid">
+            <div class="field-card">
+                <div class="field-number">1</div>
+                <h2>FIELD 1</h2>
+                <div class="field-status idle" id="status-1">READY</div>
+                <div class="field-info">
+                    <p><strong>Game:</strong> <span id="game-1">Not Started</span></p>
+                </div>
+                <div class="button-group">
+                    <a href="control.html?field=1" target="_blank" class="btn btn-control">🎮 CONTROL PANEL</a>
+                    <a href="overlay.html?field=1" target="_blank" class="btn btn-overlay">📺 VIEW OVERLAY</a>
+                </div>
+            </div>
+            <div class="field-card">
+                <div class="field-number">2</div>
+                <h2>FIELD 2</h2>
+                <div class="field-status idle" id="status-2">READY</div>
+                <div class="field-info">
+                    <p><strong>Game:</strong> <span id="game-2">Not Started</span></p>
+                </div>
+                <div class="button-group">
+                    <a href="control.html?field=2" target="_blank" class="btn btn-control">🎮 CONTROL PANEL</a>
+                    <a href="overlay.html?field=2" target="_blank" class="btn btn-overlay">📺 VIEW OVERLAY</a>
+                </div>
+            </div>
+            <div class="field-card">
+                <div class="field-number">3</div>
+                <h2>FIELD 3</h2>
+                <div class="field-status idle" id="status-3">READY</div>
+                <div class="field-info">
+                    <p><strong>Game:</strong> <span id="game-3">Not Started</span></p>
+                </div>
+                <div class="button-group">
+                    <a href="control.html?field=3" target="_blank" class="btn btn-control">🎮 CONTROL PANEL</a>
+                    <a href="overlay.html?field=3" target="_blank" class="btn btn-overlay">📺 VIEW OVERLAY</a>
+                </div>
+            </div>
+            <div class="field-card">
+                <div class="field-number">4</div>
+                <h2>FIELD 4</h2>
+                <div class="field-status idle" id="status-4">READY</div>
+                <div class="field-info">
+                    <p><strong>Game:</strong> <span id="game-4">Not Started</span></p>
+                </div>
+                <div class="button-group">
+                    <a href="control.html?field=4" target="_blank" class="btn btn-control">🎮 CONTROL PANEL</a>
+                    <a href="overlay.html?field=4" target="_blank" class="btn btn-overlay">📺 VIEW OVERLAY</a>
+                </div>
+            </div>
+            <div class="field-card">
+                <div class="field-number">5</div>
+                <h2>FIELD 5</h2>
+                <div class="field-status idle" id="status-5">READY</div>
+                <div class="field-info">
+                    <p><strong>Game:</strong> <span id="game-5">Not Started</span></p>
+                </div>
+                <div class="button-group">
+                    <a href="control.html?field=5" target="_blank" class="btn btn-control">🎮 CONTROL PANEL</a>
+                    <a href="overlay.html?field=5" target="_blank" class="btn btn-overlay">📺 VIEW OVERLAY</a>
+                </div>
+            </div>
+        </div>
+        <div class="dashboard-link">
+            <a href="../">← BACK TO DASHBOARD</a>
+        </div>
+    </div>
+    <script>
+        function checkFieldStatus() {
+            for (let i = 1; i <= 5; i++) {
+                const data = JSON.parse(localStorage.getItem(`rugbyLeagueOverlay_field${i}`) || '{}');
+                const statusEl = document.getElementById(`status-${i}`);
+                const gameEl = document.getElementById(`game-${i}`);
+                if (data.homeName && data.awayName) {
+                    statusEl.textContent = 'ACTIVE';
+                    statusEl.classList.remove('idle');
+                    statusEl.classList.add('active');
+                    gameEl.textContent = `${data.homeName} vs ${data.awayName}`;
+                } else {
+                    statusEl.textContent = 'READY';
+                    statusEl.classList.remove('active');
+                    statusEl.classList.add('idle');
+                    gameEl.textContent = 'Not Started';
+                }
+            }
+        }
+        checkFieldStatus();
+        setInterval(checkFieldStatus, 2000);
+    </script>
+</body>
+</html>

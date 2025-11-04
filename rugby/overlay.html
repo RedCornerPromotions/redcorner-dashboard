@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>Rugby League Overlay - Broadcast</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; font-family: 'Arial', 'Helvetica Neue', sans-serif; }
+        .scoreboard { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); display: flex; gap: 0; opacity: 0; animation: slideDown 0.6s ease-out 0.3s forwards; }
+        @keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-80px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        .team-section { background: linear-gradient(135deg, rgba(25, 35, 30, 0.96) 0%, rgba(15, 25, 20, 0.98) 100%); padding: 22px 40px; display: flex; align-items: center; gap: 22px; min-width: 340px; border: 3px solid rgba(255, 255, 255, 0.15); position: relative; overflow: hidden; box-shadow: 0 6px 25px rgba(0, 0, 0, 0.7); backdrop-filter: blur(10px); }
+        .team-section::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent); animation: shimmer 3s infinite; }
+        @keyframes shimmer { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }
+        .team-section.home { border-radius: 18px 0 0 18px; border-right: 2px solid rgba(255, 255, 255, 0.1); }
+        .team-section.away { border-radius: 0 18px 18px 0; border-left: 2px solid rgba(255, 255, 255, 0.1); }
+        .team-section.scoring { animation: teamScore 0.5s ease-out; }
+        @keyframes teamScore { 0%, 100% { transform: scale(1); border-color: rgba(255, 255, 255, 0.15); } 50% { transform: scale(1.02); border-color: rgba(255, 165, 38, 0.6); } }
+        .logo-container { width: 68px; height: 68px; background: rgba(255, 255, 255, 0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid rgba(255, 255, 255, 0.2); overflow: hidden; position: relative; }
+        .logo-container img { width: 100%; height: 100%; object-fit: contain; }
+        .logo-placeholder { font-size: 28px; color: rgba(255, 255, 255, 0.9); font-weight: bold; }
+        .team-info { flex: 1; }
+        .team-name { font-size: 26px; color: #ffffff; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 0, 0, 0.5); }
+        .team-record { font-size: 15px; color: rgba(255, 255, 255, 0.7); margin-top: 4px; font-weight: 600; letter-spacing: 0.5px; }
+        .score { font-size: 54px; color: #ffffff; font-weight: 900; min-width: 75px; text-align: center; text-shadow: 3px 3px 8px rgba(0, 0, 0, 0.9), 0 0 15px rgba(0, 0, 0, 0.6); position: relative; }
+        .score.pulse { animation: scorePulse 0.7s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        @keyframes scorePulse { 0% { transform: scale(1); color: #ffffff; } 30% { transform: scale(1.35); color: #ffa726; } 60% { transform: scale(1.4); color: #ffb74d; } 100% { transform: scale(1); color: #ffffff; } }
+        .score-burst { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+        .score-particle { position: absolute; width: 8px; height: 8px; background: #ffa726; border-radius: 50%; box-shadow: 0 0 10px #ffa726; animation: particleBurst 0.8s ease-out forwards; }
+        @keyframes particleBurst { 0% { opacity: 1; transform: translate(0, 0) scale(1); } 100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0); } }
+        .middle-section { background: linear-gradient(135deg, rgba(30, 40, 35, 0.96) 0%, rgba(20, 30, 25, 0.98) 100%); padding: 22px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-top: 3px solid rgba(255, 255, 255, 0.15); border-bottom: 3px solid rgba(255, 255, 255, 0.15); position: relative; min-width: 190px; box-shadow: 0 6px 25px rgba(0, 0, 0, 0.7); backdrop-filter: blur(10px); }
+        .middle-section::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent); }
+        .period { font-size: 16px; color: #ffa726; margin-bottom: 8px; font-weight: 700; text-transform: uppercase; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9); letter-spacing: 1.2px; }
+        .clock { font-size: 40px; color: #ffffff; font-weight: 900; font-family: 'Courier New', 'Roboto Mono', monospace; text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.5); letter-spacing: 2px; }
+        .clock.warning { color: #ff5252; animation: clockBlink 0.5s infinite; }
+        @keyframes clockBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .scoreboard.hidden { animation: slideUp 0.5s ease-out forwards; }
+        @keyframes slideUp { from { opacity: 1; transform: translateX(-50%) translateY(0); } to { opacity: 0; transform: translateX(-50%) translateY(-80px); } }
+        .info-bar { position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, rgba(25, 35, 30, 0.96) 0%, rgba(15, 25, 20, 0.98) 100%); padding: 16px 45px; border-radius: 25px; border: 3px solid rgba(255, 255, 255, 0.15); opacity: 0; transition: opacity 0.5s ease; box-shadow: 0 6px 25px rgba(0, 0, 0, 0.7); backdrop-filter: blur(10px); }
+        .info-bar.visible { opacity: 1; animation: infoSlideUp 0.6s ease-out forwards; }
+        @keyframes infoSlideUp { from { opacity: 0; transform: translateX(-50%) translateY(80px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        .info-text { color: #ffffff; font-size: 19px; text-align: center; text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9); font-weight: 700; letter-spacing: 0.5px; }
+        .try-celebration { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1000; }
+        .try-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 120px; font-weight: 900; color: #ffa726; text-shadow: 0 0 30px rgba(255, 167, 38, 0.8), 0 0 60px rgba(255, 152, 0, 0.6), 4px 4px 12px rgba(0, 0, 0, 0.9); opacity: 0; animation: tryCelebration 2s ease-out; }
+        @keyframes tryCelebration { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(-15deg); } 40% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(5deg); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.8) rotate(0deg); } }
+        .field-indicator { position: absolute; top: 12px; right: 12px; background: rgba(0, 0, 0, 0.7); border: 2px solid rgba(255, 255, 255, 0.3); padding: 6px 14px; border-radius: 6px; color: rgba(255, 255, 255, 0.8); font-size: 13px; font-weight: 700; backdrop-filter: blur(5px); }
+    </style>
+</head>
+<body>
+    <div class="field-indicator" id="fieldIndicator">FIELD 1</div>
+    <div class="scoreboard" id="scoreboard">
+        <div class="team-section home" id="homeSection">
+            <div class="logo-container">
+                <img id="homeLogo" src="" alt="" style="display: none;">
+                <div class="logo-placeholder" id="homeLogoPlaceholder">H</div>
+            </div>
+            <div class="team-info">
+                <div class="team-name" id="homeName">HOME</div>
+                <div class="team-record" id="homeRecord"></div>
+            </div>
+            <div class="score" id="homeScore">0</div>
+        </div>
+        <div class="middle-section">
+            <div class="period" id="period">1ST HALF</div>
+            <div class="clock" id="clock">40:00</div>
+        </div>
+        <div class="team-section away" id="awaySection">
+            <div class="score" id="awayScore">0</div>
+            <div class="team-info">
+                <div class="team-name" id="awayName">AWAY</div>
+                <div class="team-record" id="awayRecord"></div>
+            </div>
+            <div class="logo-container">
+                <img id="awayLogo" src="" alt="" style="display: none;">
+                <div class="logo-placeholder" id="awayLogoPlaceholder">A</div>
+            </div>
+        </div>
+    </div>
+    <div class="info-bar" id="infoBar">
+        <div class="info-text" id="infoText"></div>
+    </div>
+    <div class="try-celebration" id="tryCelebration"></div>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const fieldId = urlParams.get('field') || '1';
+        const storageKey = `rugbyLeagueOverlay_field${fieldId}`;
+        document.getElementById('fieldIndicator').textContent = `FIELD ${fieldId}`;
+        let previousHomeScore = 0;
+        let previousAwayScore = 0;
+        function createScoreBurst(element) {
+            const burst = document.createElement('div');
+            burst.className = 'score-burst';
+            for (let i = 0; i < 10; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'score-particle';
+                const angle = (i / 10) * Math.PI * 2;
+                const distance = 90;
+                particle.style.setProperty('--tx', `${Math.cos(angle) * distance}px`);
+                particle.style.setProperty('--ty', `${Math.sin(angle) * distance}px`);
+                burst.appendChild(particle);
+            }
+            element.appendChild(burst);
+            setTimeout(() => burst.remove(), 1000);
+        }
+        function showTryCelebration() {
+            const celebration = document.getElementById('tryCelebration');
+            const tryText = document.createElement('div');
+            tryText.className = 'try-text';
+            tryText.textContent = 'TRY! 🏉';
+            celebration.appendChild(tryText);
+            setTimeout(() => tryText.remove(), 2000);
+        }
+        function updateOverlay() {
+            const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            if (data.homeName) {
+                document.getElementById('homeName').textContent = data.homeName;
+                document.getElementById('homeLogoPlaceholder').textContent = data.homeName.charAt(0);
+            }
+            if (data.awayName) {
+                document.getElementById('awayName').textContent = data.awayName;
+                document.getElementById('awayLogoPlaceholder').textContent = data.awayName.charAt(0);
+            }
+            document.getElementById('homeRecord').textContent = data.homeRecord || '';
+            document.getElementById('awayRecord').textContent = data.awayRecord || '';
+            if (data.homeLogo) {
+                document.getElementById('homeLogo').src = data.homeLogo;
+                document.getElementById('homeLogo').style.display = 'block';
+                document.getElementById('homeLogoPlaceholder').style.display = 'none';
+            }
+            if (data.awayLogo) {
+                document.getElementById('awayLogo').src = data.awayLogo;
+                document.getElementById('awayLogo').style.display = 'block';
+                document.getElementById('awayLogoPlaceholder').style.display = 'none';
+            }
+            const homeScore = parseInt(data.homeScore || 0);
+            const awayScore = parseInt(data.awayScore || 0);
+            const homeScoreEl = document.getElementById('homeScore');
+            const awayScoreEl = document.getElementById('awayScore');
+            const homeSection = document.getElementById('homeSection');
+            const awaySection = document.getElementById('awaySection');
+            if (homeScore !== previousHomeScore) {
+                homeScoreEl.classList.add('pulse');
+                homeSection.classList.add('scoring');
+                createScoreBurst(homeScoreEl);
+                if (homeScore - previousHomeScore === 4) {
+                    showTryCelebration();
+                }
+                setTimeout(() => {
+                    homeScoreEl.classList.remove('pulse');
+                    homeSection.classList.remove('scoring');
+                }, 700);
+                previousHomeScore = homeScore;
+            }
+            if (awayScore !== previousAwayScore) {
+                awayScoreEl.classList.add('pulse');
+                awaySection.classList.add('scoring');
+                createScoreBurst(awayScoreEl);
+                if (awayScore - previousAwayScore === 4) {
+                    showTryCelebration();
+                }
+                setTimeout(() => {
+                    awayScoreEl.classList.remove('pulse');
+                    awaySection.classList.remove('scoring');
+                }, 700);
+                previousAwayScore = awayScore;
+            }
+            homeScoreEl.textContent = homeScore;
+            awayScoreEl.textContent = awayScore;
+            const clockEl = document.getElementById('clock');
+            clockEl.textContent = data.clock || '40:00';
+            const timeParts = (data.clock || '40:00').split(':');
+            const minutes = parseInt(timeParts[0]);
+            const seconds = parseInt(timeParts[1]);
+            if (minutes === 0 && seconds <= 60) {
+                clockEl.classList.add('warning');
+            } else {
+                clockEl.classList.remove('warning');
+            }
+            document.getElementById('period').textContent = data.period || '1ST HALF';
+            const scoreboard = document.getElementById('scoreboard');
+            if (data.visible === false) {
+                scoreboard.classList.add('hidden');
+            } else {
+                scoreboard.classList.remove('hidden');
+            }
+            const infoBar = document.getElementById('infoBar');
+            const infoText = document.getElementById('infoText');
+            if (data.infoText) {
+                infoText.textContent = data.infoText;
+                infoBar.classList.add('visible');
+            } else {
+                infoBar.classList.remove('visible');
+            }
+        }
+        window.addEventListener('storage', updateOverlay);
+        updateOverlay();
+        setInterval(updateOverlay, 100);
+    </script>
+</body>
+</html>
